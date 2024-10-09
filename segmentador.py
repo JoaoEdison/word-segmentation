@@ -92,10 +92,10 @@ def merge_contours(contours, dist_y=15, dist_x=7, overlap=0.25, by_overlap=False
     return rectangles_merged
 
 # Assume que a imagem de entrada está em 1024x1024
-def get_blocks(rectangles):
-    rectangles = merge_contours(rectangles, 70, 70)
+def get_blocks(rectangles, dist_y, dist_x):
+    rectangles = merge_contours(rectangles, dist_y, dist_x)
     rectangles = merge_contours(rectangles, overlap=0.01, by_overlap=True)
-    rectangles = list(filter(lambda r : filter_recs_by_size(r, 300, 1025, 300, 1025), rectangles))
+    rectangles = list(filter(lambda r : filter_recs_by_size(r, 100, 1025, 100, 1025), rectangles))
     return rectangles
 
 # Ordena as seleções de cima para baixo e da esquerda para a direita.
@@ -104,10 +104,10 @@ def sort_recs(a,b):
         return a[0] - b[0]
     return a[1] - b[1]
 
-def get_chars(box, rectangles):
+def get_chars(box, rectangles, dist_y, dist_x):
     rectangles = list(filter(lambda r : inside(box, r), rectangles))
     rectangles = list(map(lambda r : (r[0]-box[0], r[1]-box[1], r[2], r[3]), rectangles))
-    rectangles = merge_contours(rectangles, 15, 7)
+    rectangles = merge_contours(rectangles, dist_y, dist_x)
     
     # Divide em duas palavras retângulos muito altos.
     div_rectangles = []
@@ -156,23 +156,19 @@ def draw_rectangles(origin, recs, color, border_size):
     for r in recs:
         cv.rectangle(out, (r[0],r[1]),(r[0]+r[2], r[1]+r[3]), color, border_size)
     return out
- 
 
-def main():
-    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
-    pr.init_window(512, 512, "GUI")
+FIGURE_SIZE = 320
 
-    files = []
-    directory = "Page_Level_Training_Set"
-    for file in os.listdir(directory):
-        if file.endswith(".jpg") or file.endswith(".jpeg") or \
-                file.endswith(".png"):
-            files.append(file)
-            if len(files) == 5:
-                break
-    fname = os.path.join(directory, files[0])
-    print(fname)
+def get_pr_img(img):
+    img = cv.resize(img, (FIGURE_SIZE, FIGURE_SIZE))
+    img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    return pr.Image(img.data, FIGURE_SIZE, FIGURE_SIZE, 1, 4)
 
+def update_img(img, recs, color, border_size):
+    img = draw_rectangles(img, recs, color, border_size)
+    return get_pr_img(img)
+
+def load_img(fname):
     img = cv.imread(fname)
     img = cv.resize(img, (1024, 1024))
     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -183,35 +179,108 @@ def main():
     contours, hierarchy = cv.findContours(closing, 1, 2)
     rectangles = map(cv.boundingRect, contours)
     rectangles = list(filter(lambda r : filter_recs_by_size(r, 3, 500, 10, 500), rectangles))
-    
-    blocks = get_blocks(rectangles)
-    blocks_img = draw_rectangles(img, blocks, (0, 255, 0), 2)
-    blocks_img = cv.resize(blocks_img, (512, 512))
-    blocks_img = cv.cvtColor(blocks_img, cv.COLOR_BGR2RGB)
-    
-    chars = get_chars(blocks[0], rectangles)
-    crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
-    chars_img = draw_rectangles(crop, chars, (0, 255, 0), 1)
-    chars_img = cv.resize(chars_img, (512, 512))
-    chars_img = cv.cvtColor(chars_img, cv.COLOR_BGR2RGB)
-    
-    ray_img_blocks = pr.Image(blocks_img.data, 512, 512, 1, 4)
-    texture_blocks = pr.load_texture_from_image(ray_img_blocks)
-    ray_img_chars = pr.Image(chars_img.data, 512, 512, 1, 4)
-    texture_chars = pr.load_texture_from_image(ray_img_chars)
+    return img, closing, rectangles
 
-    pr.set_target_fps(10)
-    action = True
+def main():
+    SLIDER_WIDTH = 256
+    MARGIN = 800
+    X_COORDS = [MARGIN]
+    Y_COORDS = [i//2*FIGURE_SIZE+64 if i%2 == 1 else i//2*FIGURE_SIZE for i in range(0,6)]
+    Y_COORDS.append(FIGURE_SIZE*2+64*2)
+
+    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
+    pr.init_window(800, 450, "GUI")
+
+    files = []
+    directory = "Page_Level_Training_Set"
+    for file in os.listdir(directory):
+        if file.endswith(".jpg") or file.endswith(".jpeg") or \
+                file.endswith(".png"):
+            files.append(file)
+            if len(files) == 5:
+                break
+    fname = os.path.join(directory, files[2])
+    print(fname)
+    img, closing, rectangles = load_img(fname)
+    
+    word_dist_y = pr.ffi.new('float *', 15.0)
+    word_dist_x = pr.ffi.new('float *', 7.0)
+    block_dist_y = pr.ffi.new('float *', 70.0)
+    block_dist_x = pr.ffi.new('float *', 70.0)
+
+    blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
+    chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+    blocks_img = update_img(img, blocks, (0,255,0), 2)
+    crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
+    chars_img = update_img(crop, chars, (0,255,0), 2)
+   
+    texture_closing = pr.load_texture_from_image(get_pr_img(closing))
+    texture_blocks = pr.load_texture_from_image(blocks_img)
+    texture_chars = pr.load_texture_from_image(chars_img)
+    
+    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[6], 128, 64)
+
+    pr.set_target_fps(30)
+    update_textures = False
     while not pr.window_should_close():
-        if action:
-            pixels = pr.load_image_colors(pr.Image())
-            pr.update_texture(texture_blocks, pixels)
-            pr.unload_image_colors(pixels)
-            action = False
+        if pr.is_file_dropped():
+            dropped_files = pr.load_dropped_files()
+            if pr.is_file_extension(dropped_files.paths[0], ".jpg") or\
+                pr.is_file_extension(dropped_files.paths[0], ".jpeg") or\
+                pr.is_file_extension(dropped_files.paths[0], ".png"):
+                img, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
+                update_textures = True
+            pr.unload_dropped_files(dropped_files)
+
+        if pr.check_collision_point_rec(pr.get_mouse_position(), run_button) and \
+                                        pr.is_mouse_button_released(pr.MOUSE_BUTTON_LEFT):
+            word_dist_y[0] = 15.0
+            word_dist_x[0] = 7.0
+            block_dist_y[0] = 70.0
+            block_dist_x[0] = 70.0
+            update_textures = True
+
+        if update_textures:
+            blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
+            blocks_img = update_img(img, blocks, (0, 255, 0), 2)
+            pr.update_texture(texture_blocks, blocks_img.data)
+            pr.update_texture(texture_closing, get_pr_img(closing).data)
+            if len(blocks) > 0:
+                chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+                crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
+                chars_img = update_img(crop, chars, (0, 255, 0), 2)
+                pr.update_texture(texture_chars, chars_img.data)
+            else:
+                chars_img = update_img(img, [], (0, 255, 0), 2)
+                pr.update_texture(texture_chars, chars_img.data)
+            update_textures = False
+
         pr.begin_drawing()
-        pr.clear_background(pr.BLACK)
-        pr.draw_texture(texture_blocks, 0, 0, pr.WHITE)
-        pr.draw_texture(texture_chars, 0, 512, pr.WHITE)
+        pr.clear_background(pr.WHITE)
+        
+        pr.draw_texture(texture_closing, 0, 0, pr.WHITE)
+        pr.draw_texture(texture_blocks, 0, FIGURE_SIZE, pr.WHITE)
+        pr.draw_texture(texture_chars, 0, FIGURE_SIZE*2, pr.WHITE)
+        
+        prev = block_dist_y[0]
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[2], SLIDER_WIDTH, 64),   "teste 1", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
+        update_textures = update_textures or prev != block_dist_y[0]
+        prev = block_dist_x[0]
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[3], SLIDER_WIDTH, 64),  "teste 2", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
+        update_textures = update_textures or prev != block_dist_x[0]
+        prev = word_dist_y[0]
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[4], SLIDER_WIDTH, 64), "teste 3", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
+        update_textures = update_textures or prev != word_dist_y[0]
+        prev = word_dist_x[0]
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[5], SLIDER_WIDTH, 64), "teste 4", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
+        update_textures = update_textures or prev != word_dist_x[0]
+
+        pr.draw_rectangle_rec(run_button, pr.SKYBLUE)
+        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y), int(run_button.width), int(run_button.height), pr.BLUE)
+        pr.draw_text("Resetar", int(int(run_button.x) + int(run_button.width)//2 -\
+            pr.measure_text("Resetar", 10)/2), int(Y_COORDS[6] + 30), 10,\
+            pr.DARKBLUE)
+
         pr.end_drawing()
     
     pr.unload_texture(texture_blocks)
