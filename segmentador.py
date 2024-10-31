@@ -185,14 +185,14 @@ def main():
     SLIDER_WIDTH = 256
     MARGIN = 800
     X_COORDS = [MARGIN]
-    Y_COORDS = [i//2*FIGURE_SIZE+64 if i%2 == 1 else i//2*FIGURE_SIZE for i in range(0,6)]
-    Y_COORDS.append(FIGURE_SIZE*2+64*2)
+    Y_COORDS = [i//2*FIGURE_SIZE+64 if i%2 == 1 else i//2*FIGURE_SIZE for i in range(0,4)]
+    Y_COORDS.append(FIGURE_SIZE+2*64)
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
     pr.init_window(800, 450, "GUI")
 
     files = []
-    directory = "Page_Level_Training_Set"
+    directory = "test-images"
     for file in os.listdir(directory):
         if file.endswith(".jpg") or file.endswith(".jpeg") or \
                 file.endswith(".png"):
@@ -218,7 +218,7 @@ def main():
     texture_blocks = pr.load_texture_from_image(blocks_img)
     texture_chars = pr.load_texture_from_image(chars_img)
     
-    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[6], 128, 64)
+    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], 128, 64)
 
     pr.set_target_fps(30)
     update_textures = False
@@ -231,14 +231,19 @@ def main():
                 img, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
-
-        if pr.check_collision_point_rec(pr.get_mouse_position(), run_button) and \
-                                        pr.is_mouse_button_released(pr.MOUSE_BUTTON_LEFT):
-            word_dist_y[0] = 15.0
-            word_dist_x[0] = 7.0
-            block_dist_y[0] = 70.0
-            block_dist_x[0] = 70.0
-            update_textures = True
+        
+        background_color_button = pr.SKYBLUE
+        border_color = pr.DARKBLUE
+        if pr.check_collision_point_rec(pr.get_mouse_position(), run_button):
+            if pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT):
+                word_dist_y[0] = 15.0
+                word_dist_x[0] = 7.0
+                block_dist_y[0] = 70.0
+                block_dist_x[0] = 70.0
+                update_textures = True
+            else:
+                background_color_button = pr.WHITE
+                border_color = pr.BLUE
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
@@ -263,23 +268,23 @@ def main():
         pr.draw_texture(texture_chars, 0, FIGURE_SIZE*2, pr.WHITE)
         
         prev = block_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[2], SLIDER_WIDTH, 64),   "teste 1", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[0], SLIDER_WIDTH, 64),   "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
         update_textures = update_textures or prev != block_dist_y[0]
         prev = block_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[3], SLIDER_WIDTH, 64),  "teste 2", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[1], SLIDER_WIDTH, 64),  "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[4], SLIDER_WIDTH, 64), "teste 3", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[2], SLIDER_WIDTH, 64), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[5], SLIDER_WIDTH, 64), "teste 4", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[3], SLIDER_WIDTH, 64), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
 
-        pr.draw_rectangle_rec(run_button, pr.SKYBLUE)
-        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y), int(run_button.width), int(run_button.height), pr.BLUE)
+        pr.draw_rectangle_rec(run_button, background_color_button)
+        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y), int(run_button.width), int(run_button.height), border_color)
         pr.draw_text("Resetar", int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text("Resetar", 10)/2), int(Y_COORDS[6] + 30), 10,\
-            pr.DARKBLUE)
+            pr.measure_text("Resetar", 10)/2), int(Y_COORDS[4] + 30), 10,\
+            border_color)
 
         pr.end_drawing()
     
