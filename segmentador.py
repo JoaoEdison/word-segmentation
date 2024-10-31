@@ -157,16 +157,14 @@ def draw_rectangles(origin, recs, color, border_size):
         cv.rectangle(out, (r[0],r[1]),(r[0]+r[2], r[1]+r[3]), color, border_size)
     return out
 
-FIGURE_SIZE = 320
-
-def get_pr_img(img):
-    img = cv.resize(img, (FIGURE_SIZE, FIGURE_SIZE))
+def get_pr_img(img, figure_size):
+    img = cv.resize(img, (figure_size, figure_size))
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-    return pr.Image(img.data, FIGURE_SIZE, FIGURE_SIZE, 1, 4)
+    return pr.Image(img.data, figure_size, figure_size, 1, 4)
 
-def update_img(img, recs, color, border_size):
+def update_img(img, recs, color, border_size, figure_size):
     img = draw_rectangles(img, recs, color, border_size)
-    return get_pr_img(img)
+    return get_pr_img(img, figure_size)
 
 def load_img(fname):
     img = cv.imread(fname)
@@ -182,15 +180,21 @@ def load_img(fname):
     return img, closing, rectangles
 
 def main():
+    figure_size = 320
     SLIDER_WIDTH = 256
     MARGIN = 800
     X_COORDS = [MARGIN]
-    Y_COORDS = [i//2*FIGURE_SIZE+64 if i%2 == 1 else i//2*FIGURE_SIZE for i in range(0,4)]
-    Y_COORDS.append(FIGURE_SIZE+2*64)
+    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0,4)]
+    Y_COORDS.append(figure_size+2*64)
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
-    pr.init_window(800, 450, "GUI")
+    pr.init_window(0, 0, "GUI")
 
+    full_height = pr.get_screen_height()
+    scale_y = Y_COORDS[-1] / full_height
+    Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
+    figure_size = int(figure_size*scale_y)
+    
     files = []
     directory = "test-images"
     for file in os.listdir(directory):
@@ -210,11 +214,11 @@ def main():
 
     blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
     chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-    blocks_img = update_img(img, blocks, (0,255,0), 2)
+    blocks_img = update_img(img, blocks, (0,255,0), 2, figure_size)
     crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
-    chars_img = update_img(crop, chars, (0,255,0), 2)
+    chars_img = update_img(crop, chars, (0,255,0), 2, figure_size)
    
-    texture_closing = pr.load_texture_from_image(get_pr_img(closing))
+    texture_closing = pr.load_texture_from_image(get_pr_img(closing, figure_size))
     texture_blocks = pr.load_texture_from_image(blocks_img)
     texture_chars = pr.load_texture_from_image(chars_img)
     
@@ -247,16 +251,16 @@ def main():
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
-            blocks_img = update_img(img, blocks, (0, 255, 0), 2)
+            blocks_img = update_img(img, blocks, (0, 255, 0), 2, figure_size)
             pr.update_texture(texture_blocks, blocks_img.data)
-            pr.update_texture(texture_closing, get_pr_img(closing).data)
+            pr.update_texture(texture_closing, get_pr_img(closing, figure_size).data)
             if len(blocks) > 0:
                 chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
                 crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
-                chars_img = update_img(crop, chars, (0, 255, 0), 2)
+                chars_img = update_img(crop, chars, (0, 255, 0), 2, figure_size)
                 pr.update_texture(texture_chars, chars_img.data)
             else:
-                chars_img = update_img(img, [], (0, 255, 0), 2)
+                chars_img = update_img(img, [], (0, 255, 0), 2, figure_size)
                 pr.update_texture(texture_chars, chars_img.data)
             update_textures = False
 
@@ -264,8 +268,8 @@ def main():
         pr.clear_background(pr.WHITE)
         
         pr.draw_texture(texture_closing, 0, 0, pr.WHITE)
-        pr.draw_texture(texture_blocks, 0, FIGURE_SIZE, pr.WHITE)
-        pr.draw_texture(texture_chars, 0, FIGURE_SIZE*2, pr.WHITE)
+        pr.draw_texture(texture_blocks, 0, figure_size, pr.WHITE)
+        pr.draw_texture(texture_chars, 0, figure_size*2, pr.WHITE)
         
         prev = block_dist_y[0]
         pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[0], SLIDER_WIDTH, 64),   "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
