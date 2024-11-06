@@ -179,6 +179,34 @@ def load_img(fname):
     rectangles = list(filter(lambda r : filter_recs_by_size(r, 3, 500, 10, 500), rectangles))
     return img, closing, rectangles
 
+word_dist_y = pr.ffi.new('float *', 15.0)
+word_dist_x = pr.ffi.new('float *', 7.0)
+block_dist_y = pr.ffi.new('float *', 70.0)
+block_dist_x = pr.ffi.new('float *', 70.0)
+
+# Para cada um dos arquivos, carregar todos os retângulos encontrados e colocar
+# junto do texto de referência.
+# Dividir em conjunto de treino e de validação (0.7, 0.3)
+# Limpar a rede
+# Para cada retângulo, redimensionar para um multiplo do tamanho da entrada
+# enviar cada fração para a rede
+# Computar o erro
+# Acompanhar o treinamento
+# Salvar a rede
+# Se a rede existir, carregá-la em vez de treinar
+# Obter o texto.
+def train_net(files):
+    dataset = []
+    for file in files:
+        img, closing, rectangles = load_img(file[0])
+        blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
+        chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+        img_words = []
+        for rec in chars:
+            img_words.append(closing[blocks[0][1]+rec[1]: blocks[0][0]+rec[0]])
+        dataset.append((img_words, file[1].split(' ')))
+    
+
 def main():
     figure_size = 320
     SLIDER_WIDTH = 256
@@ -196,22 +224,22 @@ def main():
     figure_size = int(figure_size*scale_y)
     
     files = []
-    directory = "Page_Level_Training_Set"
+    directory = "test-images"
     for file in os.listdir(directory):
         if file.endswith(".jpg") or file.endswith(".jpeg") or \
                 file.endswith(".png"):
-            files.append(file)
-            if len(files) == 5:
+            file_name = os.path.join(directory, file)
+            text_file = os.path.join(directory, file.split('.')[0] + ".txt")
+            with open(text_file, "r") as f:
+                content = f.read()
+                files.append((file_name, content))
+            if len(files) == 10:
                 break
-    fname = os.path.join(directory, files[2])
-    print(fname)
-    img, closing, rectangles = load_img(fname)
-    
-    word_dist_y = pr.ffi.new('float *', 15.0)
-    word_dist_x = pr.ffi.new('float *', 7.0)
-    block_dist_y = pr.ffi.new('float *', 70.0)
-    block_dist_x = pr.ffi.new('float *', 70.0)
 
+    train_net(files)
+
+    img, closing, rectangles = load_img(files[0][0])
+    
     blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
     chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
     blocks_img = update_img(img, blocks, (0,255,0), 2, figure_size)
