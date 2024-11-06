@@ -1,4 +1,4 @@
-# Substituir todas as constantes por parâmetros.
+# https://pylessons.com/ctc-text-recognition
 
 import numpy as np
 import cv2 as cv
@@ -191,12 +191,12 @@ def main():
     pr.init_window(0, 0, "GUI")
 
     full_height = pr.get_screen_height()
-    scale_y = Y_COORDS[-1] / full_height
+    scale_y = full_height / (3.5*figure_size)
     Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
     figure_size = int(figure_size*scale_y)
     
     files = []
-    directory = "test-images"
+    directory = "Page_Level_Training_Set"
     for file in os.listdir(directory):
         if file.endswith(".jpg") or file.endswith(".jpeg") or \
                 file.endswith(".png"):
