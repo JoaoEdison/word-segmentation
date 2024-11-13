@@ -1,2 +1,4 @@
 setuptools
 raylib
+tensorflow
+keras-ctcmodel

@@ -1,13 +1,15 @@
-# https://pylessons.com/ctc-text-recognition
-
 import numpy as np
 import cv2 as cv
 import os
+import re
 import math
 import functools
 from itertools import accumulate
-import pytesseract
 import pyray as pr
+from CTCLayer import CTCLayer
+
+import tensorflow as tf
+from tensorflow.keras import layers, models, optimizers
 
 # Remove contornos muito pequenos e muito grandes.
 def filter_recs_by_size(r, min_w, max_w, min_h, max_h):
@@ -184,47 +186,37 @@ word_dist_x = pr.ffi.new('float *', 7.0)
 block_dist_y = pr.ffi.new('float *', 70.0)
 block_dist_x = pr.ffi.new('float *', 70.0)
 
-# Para cada um dos arquivos, carregar todos os retângulos encontrados e colocar
-# junto do texto de referência.
-# Dividir em conjunto de treino e de validação (0.7, 0.3)
-# Limpar a rede
-# Para cada retângulo, redimensionar para um multiplo do tamanho da entrada
-# enviar cada fração para a rede
-# Computar o erro
-# Acompanhar o treinamento
-# Salvar a rede
-# Se a rede existir, carregá-la em vez de treinar
-# Obter o texto.
-def train_net(files):
-    dataset = []
-    for file in files:
-        img, closing, rectangles = load_img(file[0])
-        blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
-        chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-        img_words = []
-        for rec in chars:
-            img_words.append(closing[blocks[0][1]+rec[1]: blocks[0][0]+rec[0]])
-        dataset.append((img_words, file[1].split(' ')))
-    
+EPOCHS = 50
+batch_size = 5
+width_input = 64
+height_input = 16
+max_len = -1
+ind_to_alphabet = None
 
-def main():
-    figure_size = 320
-    SLIDER_WIDTH = 256
-    MARGIN = 800
-    X_COORDS = [MARGIN]
-    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0,4)]
-    Y_COORDS.append(figure_size+2*64)
+# Referências:
+# https://medium.com/@natsunoyuki/ocr-with-the-ctc-loss-efa62ebd8625
+# https://keras.io/examples/vision/captcha_ocr/#model
+# https://www.tensorflow.org/tutorials/keras/save_and_load
 
-    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
-    pr.init_window(0, 0, "GUI")
+def create_model(num_glyphs):
+    labels = layers.Input(shape=(None,), name='label', dtype='float32')
+    inputs = layers.Input(shape=(width_input, height_input, 1), name='image', dtype='float32') 
+    x = layers.Conv2D(16, (3,3), activation='relu')(inputs)
+    x = layers.Conv2D(8, (3,3), activation='relu')(x)
+    x = layers.MaxPooling2D((2,2))(x)
+    x = layers.Reshape(((width_input-4)//2, (height_input-4)//2*8))(x)
+    x = layers.Dense(16, activation='relu')(x)
+    x = layers.Bidirectional(layers.LSTM(32, return_sequences=True))(x)
+    x = layers.Dense(num_glyphs+1, activation='softmax', name='dense2')(x)
+    output = CTCLayer()(labels, x)
+    model = models.Model(inputs=[inputs, labels], outputs=output)
+    model.compile(optimizer=optimizers.Adam())
+    return model
 
-    full_height = pr.get_screen_height()
-    scale_y = full_height / (3.5*figure_size)
-    Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
-    figure_size = int(figure_size*scale_y)
-    
+def get_net():
+    model_is_saved = os.path.isfile('modelo.keras')
     files = []
-    directory = "test-images"
+    directory = "test-images" if model_is_saved else "Page_Level_Training_Set"
     for file in os.listdir(directory):
         if file.endswith(".jpg") or file.endswith(".jpeg") or \
                 file.endswith(".png"):
@@ -236,7 +228,135 @@ def main():
             if len(files) == 10:
                 break
 
-    train_net(files)
+    if model_is_saved:
+        alphabet = ['"', ',', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7',
+                '8', '9', ':', 'A', 'B', 'C', 'E', 'F', 'H', 'I', 'J', 'K', 'L',
+                'R', 'S', 'U', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+                'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v',
+                'w', 'x', 'y', 'z']
+        max_len = 16
+        alphabet_to_ind = layers.StringLookup(vocabulary=list(alphabet))
+        ind_to_alphabet = layers.StringLookup(vocabulary=alphabet_to_ind.get_vocabulary(), invert=True)
+
+        model = models.load_model('modelo.keras')
+    else:
+        # Determina o comprimento da palavra mais longa e o total de símbolos no dataset:
+        texts = [file[1] for file in files]
+        words = [word for text in texts for word in text.split(' ')]
+        max_len = max([len(word) for word in words])
+        alphabet = set(c for word in words for c in word)
+        alphabet = sorted(list(alphabet))
+        print(alphabet)
+        print(max_len)
+        alphabet_to_ind = layers.StringLookup(vocabulary=list(alphabet))
+        ind_to_alphabet = layers.StringLookup(vocabulary=alphabet_to_ind.get_vocabulary(), invert=True)
+
+        # Para cada um dos arquivos, carrega todos os retângulos encontrados e coloca
+        # junto do texto de referência.
+        X_dataset = []
+        y_dataset = []
+        for file in files:
+            img, closing, rectangles = load_img(file[0])
+            blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
+            chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+            words = file[1].split(' ')
+            firsts = min(len(words), len(chars))
+            chars = chars[:firsts]
+            words = words[:firsts]
+            y_dataset = y_dataset + [word+(max_len - len(word))*' ' for word in words]
+            # Redimensiona a altura para 16 e o comprimento para 64
+            for rec in chars:
+                y = blocks[0][1]+rec[1]
+                x = blocks[0][0]+rec[0]
+                crop = closing[y:y+rec[3], x:x+rec[2]]
+                crop = cv.resize(crop, (height_input, width_input))
+                crop = np.array(crop.astype(np.uint8))
+                X_dataset.append(crop)
+        # Divide em conjunto de treino e de validação (0.7, 0.3)
+        split = round(len(X_dataset)*0.7)
+        X_train_set = np.array(X_dataset[:split])
+        y_train_set = np.array(y_dataset[:split])
+        X_valid_set = np.array(X_dataset[split:])
+        y_valid_set = np.array(y_dataset[split:])
+        
+        def encode_data(image, label):
+            image = layers.Rescaling(1.0/255)(image)
+            label = alphabet_to_ind(tf.strings.unicode_split(label, input_encoding='UTF-8'))
+            return {"image": image, "label" : label}
+
+        train_ds = tf.data.Dataset.from_tensor_slices((X_train_set, y_train_set))
+        train_ds = train_ds.map(encode_data, num_parallel_calls=tf.data.AUTOTUNE)
+        train_ds = train_ds.batch(batch_size)
+        train_ds = train_ds.prefetch(buffer_size = tf.data.AUTOTUNE)
+
+        valid_ds = tf.data.Dataset.from_tensor_slices((X_valid_set, y_valid_set))
+        valid_ds = valid_ds.map(encode_data, num_parallel_calls=tf.data.AUTOTUNE)
+        valid_ds = valid_ds.batch(batch_size)
+        valid_ds = valid_ds.prefetch(buffer_size = tf.data.AUTOTUNE)
+    
+        model = create_model(len(alphabet_to_ind.get_vocabulary()))
+        
+        checkpoint_path = 'training/cp-{epoch:04d}.weights.h5'
+        checkpoint_dir = 'training'
+        cp_callback =\
+        tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,\
+                save_weights_only=True, verbose=1)
+        
+        weights_dir = list(sorted(os.listdir(checkpoint_dir)))
+        last_epoch = 0
+        if len(weights_dir) > 0:
+            last_epoch_match = re.search(r'\d+', weights_dir[-1])
+            if last_epoch_match:
+                last_epoch = int(last_epoch_match.group(0))
+                model.load_weights(os.path.join(checkpoint_dir, weights_dir[-1]))
+        model.fit(train_ds, epochs=EPOCHS-last_epoch, validation_data=valid_ds,\
+                callbacks=[cp_callback], verbose=2)
+    model.summary()
+    prediction_model = models.Model(model.input[0],
+                                    model.get_layer(name = 'dense2').output)
+    return files, prediction_model
+
+def decode_batch_prediction(pred):
+    input_len = np.ones(pred.shape[0]) * pred.shape[1]
+    decoded = tf.keras.backend.ctc_decode(pred, 
+                      input_length = input_len, 
+                                 greedy = True)
+    decoded = decoded[0][0][:, :max_len]
+    output = []
+    for d in decoded:
+        # Convert the predicted indices to the corresponding chars.
+        d = tf.strings.reduce_join(ind_to_alphabet(d))
+        d = d.numpy().decode("utf-8")
+        output.append(d)
+    return output
+
+def recognize(img, model):
+    # Erro...
+    img = img.astype('float32')
+    img /= 255.0
+    print(img.shape)
+    pred = model.predict(img)
+    return decode_batch_prediction(pred)
+
+def main():
+    figure_size = 320
+    SLIDER_WIDTH = 256
+    MARGIN = 800
+    X_COORDS = [MARGIN]
+    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0,4)]
+    Y_COORDS.append(figure_size+2*64)
+    Y_COORDS.append(figure_size+3*64)
+    Y_COORDS.append(figure_size+4*64)
+
+    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
+    pr.init_window(0, 0, "GUI")
+
+    full_height = pr.get_screen_height()
+    scale_y = full_height / (3.5*figure_size)
+    Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
+    figure_size = int(figure_size*scale_y)
+    
+    files, model = get_net()
 
     img, closing, rectangles = load_img(files[0][0])
     
@@ -250,7 +370,9 @@ def main():
     texture_blocks = pr.load_texture_from_image(blocks_img)
     texture_chars = pr.load_texture_from_image(chars_img)
     
-    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], 128, 64)
+    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], 128, 64)
+    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], 128, 64)
+    text = ""
 
     pr.set_target_fps(30)
     update_textures = False
@@ -264,18 +386,36 @@ def main():
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
         
-        background_color_button = pr.SKYBLUE
-        border_color = pr.DARKBLUE
-        if pr.check_collision_point_rec(pr.get_mouse_position(), run_button):
-            if pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT):
+        background_color_button_run = background_color_button_reset = pr.SKYBLUE
+        border_color_run = border_color_reset = pr.DARKBLUE
+
+        mouse_position = pr.get_mouse_position()
+        pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
+        if pr.check_collision_point_rec(mouse_position, reset_button):
+            if pressed:
                 word_dist_y[0] = 15.0
                 word_dist_x[0] = 7.0
                 block_dist_y[0] = 70.0
                 block_dist_x[0] = 70.0
                 update_textures = True
             else:
-                background_color_button = pr.WHITE
-                border_color = pr.BLUE
+                background_color_button_reset = pr.WHITE
+                border_color_reset = pr.BLUE
+        elif pr.check_collision_point_rec(mouse_position, run_button):
+            if pressed:
+                blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
+                if len(blocks) > 0:
+                    chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+                    text = ""
+                    for rec in chars:
+                        y = blocks[0][1]+rec[1]
+                        x = blocks[0][0]+rec[0]
+                        crop = closing[y:y+rec[3], x:x+rec[2]]
+                        crop = cv.resize(crop, (height_input, width_input))
+                        text += recognize(crop, model) + ' '
+            else:
+                background_color_button_run = pr.WHITE
+                border_color_run = pr.BLUE
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
@@ -312,11 +452,22 @@ def main():
         pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[3], SLIDER_WIDTH, 64), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
 
-        pr.draw_rectangle_rec(run_button, background_color_button)
-        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y), int(run_button.width), int(run_button.height), border_color)
-        pr.draw_text("Resetar", int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text("Resetar", 10)/2), int(Y_COORDS[4] + 30), 10,\
-            border_color)
+        pr.draw_rectangle_rec(reset_button, background_color_button_reset)
+        pr.draw_rectangle_rec(run_button, background_color_button_run)
+        pr.draw_rectangle_lines(int(reset_button.x), int(reset_button.y),\
+                int(reset_button.width), int(reset_button.height),\
+                border_color_reset)
+        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y),\
+                int(run_button.width), int(run_button.height),\
+                border_color_run)
+        pr.draw_text("Restaurar", int(int(reset_button.x) + int(reset_button.width)//2 -\
+            pr.measure_text("Restaurar", 10)/2), int(Y_COORDS[4] + 30), 10,\
+            border_color_reset)
+        pr.draw_text("Executar", int(int(run_button.x) + int(run_button.width)//2 -\
+            pr.measure_text("Executar", 10)/2), int(Y_COORDS[5] + 30), 10,\
+            border_color_run)
+
+        pr.draw_text(text, X_COORDS[0], Y_COORDS[6], 20, pr.BLUE)
 
         pr.end_drawing()
     
