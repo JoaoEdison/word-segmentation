@@ -110,36 +110,9 @@ def get_chars(box, rectangles, dist_y, dist_x):
     rectangles = list(filter(lambda r : inside(box, r), rectangles))
     rectangles = list(map(lambda r : (r[0]-box[0], r[1]-box[1], r[2], r[3]), rectangles))
     rectangles = merge_contours(rectangles, dist_y, dist_x)
-    
-    # Divide em duas palavras retângulos muito altos.
-    div_rectangles = []
-    for r in rectangles:
-        if r[3] > 60:
-            div_rectangles.append((r[0], r[1],         r[2], r[3]//2))
-            div_rectangles.append((r[0], r[1]+r[3]//2, r[2], r[3]//2))
-        else:
-            div_rectangles.append(r)
+    rectangles.sort(key=functools.cmp_to_key(sort_recs))
+    return rectangles
 
-    div_rectangles.sort(key=functools.cmp_to_key(sort_recs))
-    
-    return div_rectangles
-
-    ## Segmenta as palavras em caracteres.
-    #min_w = 500
-    #for r in div_rectangles:
-    #    if r[2] < min_w:
-    #        min_w = r[2]
-    #if min_w > 25 or min_w < 17:
-    #    mean = int(round(functools.reduce(lambda a, b: (0, 0, 0, a[3]+b[3]),\
-    #        div_rectangles)[3] / len(div_rectangles)))
-    #    min_w = min(mean, min_w)
-    #
-    #new_rectangles = []
-    #for r in div_rectangles:
-    #    for i in range(r[0], r[0]+r[2], min_w):
-    #        new_rectangles.append((i, r[1], min_w, r[3]))
-    #return new_rectangles
-    
 ## Envia para a engine de OCR e junta o texto.
 #text = ""
 #for r in div_rectangles:
@@ -181,103 +154,99 @@ def load_img(fname):
     rectangles = list(filter(lambda r : filter_recs_by_size(r, 3, 500, 10, 500), rectangles))
     return img, closing, rectangles
 
-word_dist_y = pr.ffi.new('float *', 15.0)
-word_dist_x = pr.ffi.new('float *', 7.0)
-block_dist_y = pr.ffi.new('float *', 70.0)
+block_dist_y = pr.ffi.new('float *', 39.0)
 block_dist_x = pr.ffi.new('float *', 70.0)
+word_dist_y = pr.ffi.new('float *', 15.0)
+word_dist_x = pr.ffi.new('float *', 21.0)
 
 # Referências:
 # https://medium.com/@natsunoyuki/ocr-with-the-ctc-loss-efa62ebd8625
 # https://keras.io/examples/vision/captcha_ocr
 # https://www.tensorflow.org/tutorials/keras/save_and_load
 
-EPOCHS = 50
-batch_size = 20
-width_input = 64
-height_input = 16
+DATASET_SIZE = 30000
+EPOCHS = 500
+batch_size = 15
+width_input = 100
+height_input = 25
+
+TRAIN_MODEL = True
+
 max_len = -1
+alphabet = None
 alphabet_to_ind = None
 ind_to_alphabet = None
 
 def create_model(num_glyphs):
+    print(num_glyphs)
     labels = layers.Input(shape=(None,), name='label', dtype='float32')
     inputs = layers.Input(shape=(width_input, height_input, 1), name='image', dtype='float32') 
-    x = layers.Conv2D(16, (3,3), activation='relu')(inputs)
-    x = layers.Conv2D(8, (3,3), activation='relu')(x)
+    x = layers.Conv2D(32, (3,3), activation='relu')(inputs)
+    last_filters = 16
+    x = layers.Conv2D(last_filters, (3,3), activation='relu')(x)
     x = layers.MaxPooling2D((2,2))(x)
-    x = layers.Reshape(((width_input-4)//2, (height_input-4)//2*8))(x)
-    x = layers.Dense(16, activation='relu')(x)
-    x = layers.Bidirectional(layers.LSTM(32, return_sequences=True))(x)
+    x = layers.Reshape(((width_input-4)//2, (height_input-4)//2*last_filters))(x)
+    x = layers.Dense(last_filters*10, activation='relu')(x)
+    x = layers.Bidirectional(layers.LSTM(128, return_sequences=True))(x)
+    x = layers.Bidirectional(layers.LSTM(128, return_sequences=True))(x)
     x = layers.Dense(num_glyphs+1, activation='softmax', name='dense2')(x)
     output = CTCLayer()(labels, x)
     model = models.Model(inputs=[inputs, labels], outputs=output)
     model.compile(optimizer=optimizers.Adam())
     return model
 
-model_is_saved = os.path.isfile('modelo.keras')
-files = []
-directory = "test-images" if model_is_saved else "Page_Level_Training_Set"
-for file in os.listdir(directory):
-    if file.endswith(".jpg") or file.endswith(".jpeg") or \
-            file.endswith(".png"):
-        file_name = os.path.join(directory, file)
-        text_file = os.path.join(directory, file.split('.')[0] + ".txt")
-        with open(text_file, "r") as f:
-            content = f.read()
-            files.append((file_name, content))
-        if len(files) == 10:
-            break
+test_image = 'test-images/81.jpg'
 
-if model_is_saved:
-    alphabet = ['"', ',', '-', '.', '0', '1', '2', '3', '4', '5', '6', '7',
-            '8', '9', ':', 'A', 'B', 'C', 'E', 'F', 'H', 'I', 'J', 'K', 'L',
-            'R', 'S', 'U', 'W', 'Y', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
-            'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'v',
-            'w', 'x', 'y', 'z']
-    max_len = 16
-    alphabet_to_ind = layers.StringLookup(vocabulary=list(alphabet))
-    ind_to_alphabet = layers.StringLookup(vocabulary=alphabet_to_ind.get_vocabulary(), invert=True)
-else:
-    # Determina o comprimento da palavra mais longa e o total de símbolos no dataset:
-    texts = [file[1] for file in files]
-    words = [word for text in texts for word in text.split(' ')]
-    max_len = max([len(word) for word in words])
-    alphabet = set(c for word in words for c in word)
-    alphabet = sorted(list(alphabet))
-    print(alphabet)
-    print(max_len)
-    alphabet_to_ind = layers.StringLookup(vocabulary=list(alphabet))
-    ind_to_alphabet = layers.StringLookup(vocabulary=alphabet_to_ind.get_vocabulary(), invert=True)
+dataset_dir = 'Word_Level_Training_Set'
+train_model = os.path.isdir(dataset_dir) and TRAIN_MODEL
+files = []
+if train_model:
+    with open(os.path.join(dataset_dir, 'train.txt'), 'r') as file:
+        for line in file:
+            path_and_word = line.strip().split('\t')
+            files.append((os.path.join(dataset_dir, path_and_word[0]), path_and_word[1].lower()))
+            if len(files) == DATASET_SIZE:
+                break
+
+# Determina o comprimento da palavra mais longa e o total de símbolos no dataset:
+#words = [file[1] for file in files]
+#max_len = max([len(word) for word in words])
+#alphabet = set(c for word in words for c in word.lower())
+#alphabet = list(sorted(list(alphabet)))
+#print(alphabet)
+#print(max_len)
+
+alphabet = ['!', '"', '#', '$', '%', '&', "'", '(', ')', ',', '-', '.', '/',\
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '=', '?', 'a',\
+        'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',\
+        'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+max_len = 18
+
+alphabet_to_ind = layers.StringLookup(vocabulary=alphabet)
+ind_to_alphabet = layers.StringLookup(vocabulary=alphabet_to_ind.get_vocabulary(), invert=True)
 
 def encode_data(image, label):
     image = layers.Rescaling(1.0/255)(image)
+    image = tf.transpose(image, perm = [1, 0])
     label = alphabet_to_ind(tf.strings.unicode_split(label, input_encoding='UTF-8'))
     return {"image": image, "label" : label}
 
-if model_is_saved:
-    model = models.load_model('modelo.keras')
-else:
-    # Para cada um dos arquivos, carrega todos os retângulos encontrados e coloca
-    # junto do texto de referência.
+if train_model:
     X_dataset = []
     y_dataset = []
     for file in files:
-        img, closing, rectangles = load_img(file[0])
-        blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
-        chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-        words = file[1].split(' ')
-        firsts = min(len(words), len(chars))
-        chars = chars[:firsts]
-        words = words[:firsts]
-        y_dataset = y_dataset + [word+(max_len - len(word))*' ' for word in words]
-        # Redimensiona a altura para 16 e o comprimento para 64
-        for rec in chars:
-            y = blocks[0][1]+rec[1]
-            x = blocks[0][0]+rec[0]
-            crop = closing[y:y+rec[3], x:x+rec[2]]
-            crop = cv.resize(crop, (height_input, width_input))
-            crop = np.array(crop.astype(np.uint8))
-            X_dataset.append(crop)
+        word = file[1]+(max_len - len(file[1]))*' '
+        y_dataset.append(word)
+
+        gray = cv.imread(file[0], cv.IMREAD_GRAYSCALE)
+        gray = cv.resize(gray, (width_input, height_input))
+        gray = 255 - cv.GaussianBlur(gray, (3, 3), 0)
+        canny = cv.Canny(gray, 50, 150, apertureSize=3)
+        kernel = np.ones((3,3), np.uint8)
+        closing = cv.morphologyEx(canny, cv.MORPH_CLOSE, kernel)
+        closing = np.array(closing.astype(np.uint8))
+        X_dataset.append(closing)
+
     # Divide em conjunto de treino e de validação (0.7, 0.3)
     split = round(len(X_dataset)*0.7)
     X_train_set = np.array(X_dataset[:split])
@@ -295,15 +264,18 @@ else:
     valid_ds = valid_ds.batch(batch_size)
     valid_ds = valid_ds.prefetch(buffer_size = tf.data.AUTOTUNE)
 
-    model = create_model(len(alphabet_to_ind.get_vocabulary()))
-    
-    checkpoint_path = 'training/cp-{epoch:04d}.weights.h5'
-    checkpoint_dir = 'training'
+model = create_model(len(alphabet_to_ind.get_vocabulary()))
+checkpoint_path = 'training/cp-{epoch:04d}.weights.h5'
+checkpoint_dir = 'training'
+weights_dir = list(sorted(os.listdir(checkpoint_dir)))
+
+if train_model:
     cp_callback =\
     tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,\
             save_weights_only=True, verbose=1, save_best_only=True)
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor="val_loss",\
+            patience=20, restore_best_weights=True)
     
-    weights_dir = list(sorted(os.listdir(checkpoint_dir)))
     last_epoch = 0
     if len(weights_dir) > 0:
         last_epoch_match = re.search(r'\d+', weights_dir[-1])
@@ -311,7 +283,10 @@ else:
             last_epoch = int(last_epoch_match.group(0))
             model.load_weights(os.path.join(checkpoint_dir, weights_dir[-1]))
     model.fit(train_ds, epochs=EPOCHS-last_epoch, validation_data=valid_ds,\
-            callbacks=[cp_callback], verbose=2)
+            callbacks=[early_stopping, cp_callback], verbose=2)
+else:
+    model.load_weights(os.path.join(checkpoint_dir, weights_dir[-1]))
+
 model.summary()
 prediction_model = models.Model(model.input[0],
                                 model.get_layer(name = 'dense2').output)
@@ -328,14 +303,14 @@ def decode_batch_prediction(pred):
         output.append(res)
     return output
 
-def recognize(chars):
+def recognize(closing, block, chars):
     X_test = []
     y_test = []
     for rec in chars:
-        y = blocks[0][1]+rec[1]
-        x = blocks[0][0]+rec[0]
+        y = block[1]+rec[1]
+        x = block[0]+rec[0]
         crop = closing[y:y+rec[3], x:x+rec[2]]
-        crop = cv.resize(crop, (height_input, width_input))
+        crop = cv.resize(crop, (width_input, height_input))
         crop = np.array(crop.astype(np.uint8))
         X_test.append(crop)
         y_test.append("")
@@ -373,7 +348,7 @@ def main():
     Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
     figure_size = int(figure_size*scale_y)
     
-    img, closing, rectangles = load_img(files[0][0])
+    img, closing, rectangles = load_img(test_image)
     
     blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
     chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
@@ -420,7 +395,7 @@ def main():
             if pressed:
                 blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
                 chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-                text = recognize(chars)
+                text = recognize(closing, blocks[0], chars) if len(blocks) > 0 else ""
             else:
                 background_color_button_run = pr.WHITE
                 border_color_run = pr.BLUE
