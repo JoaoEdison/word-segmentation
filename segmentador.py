@@ -154,23 +154,28 @@ def load_img(fname):
     rectangles = list(filter(lambda r : filter_recs_by_size(r, 3, 500, 10, 500), rectangles))
     return img, closing, rectangles
 
-block_dist_y = pr.ffi.new('float *', 39.0)
-block_dist_x = pr.ffi.new('float *', 70.0)
-word_dist_y = pr.ffi.new('float *', 15.0)
-word_dist_x = pr.ffi.new('float *', 21.0)
+BLOCK_DIST_Y = 39.0
+BLOCK_DIST_X = 70.0
+WORD_DIST_Y = 15.0
+WORD_DIST_X = 21.0
+
+block_dist_y = pr.ffi.new('float *', BLOCK_DIST_Y)
+block_dist_x = pr.ffi.new('float *', BLOCK_DIST_X)
+word_dist_y = pr.ffi.new('float *', WORD_DIST_Y)
+word_dist_x = pr.ffi.new('float *', WORD_DIST_X)
 
 # Referências:
 # https://medium.com/@natsunoyuki/ocr-with-the-ctc-loss-efa62ebd8625
 # https://keras.io/examples/vision/captcha_ocr
 # https://www.tensorflow.org/tutorials/keras/save_and_load
 
-DATASET_SIZE = 30000
+DATASET_SIZE = -1
 EPOCHS = 500
 batch_size = 15
 width_input = 100
 height_input = 25
 
-TRAIN_MODEL = True
+TRAIN_MODEL = False
 
 max_len = -1
 alphabet = None
@@ -182,6 +187,7 @@ def create_model(num_glyphs):
     labels = layers.Input(shape=(None,), name='label', dtype='float32')
     inputs = layers.Input(shape=(width_input, height_input, 1), name='image', dtype='float32') 
     x = layers.Conv2D(32, (3,3), activation='relu')(inputs)
+    # TODO: 32
     last_filters = 16
     x = layers.Conv2D(last_filters, (3,3), activation='relu')(x)
     x = layers.MaxPooling2D((2,2))(x)
@@ -204,22 +210,24 @@ if train_model:
     with open(os.path.join(dataset_dir, 'train.txt'), 'r') as file:
         for line in file:
             path_and_word = line.strip().split('\t')
-            files.append((os.path.join(dataset_dir, path_and_word[0]), path_and_word[1].lower()))
+            files.append((os.path.join(dataset_dir, path_and_word[0]), path_and_word[1]))
             if len(files) == DATASET_SIZE:
                 break
 
 # Determina o comprimento da palavra mais longa e o total de símbolos no dataset:
 #words = [file[1] for file in files]
 #max_len = max([len(word) for word in words])
-#alphabet = set(c for word in words for c in word.lower())
+#alphabet = set(c for word in words for c in word)
 #alphabet = list(sorted(list(alphabet)))
 #print(alphabet)
 #print(max_len)
 
 alphabet = ['!', '"', '#', '$', '%', '&', "'", '(', ')', ',', '-', '.', '/',\
-        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '=', '?', 'a',\
-        'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o',\
-        'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
+        '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', ':', '=', '?', 'A',\
+        'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O',\
+        'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c',\
+        'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q',\
+        'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z']
 max_len = 18
 
 alphabet_to_ind = layers.StringLookup(vocabulary=alphabet)
@@ -274,7 +282,7 @@ if train_model:
     tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,\
             save_weights_only=True, verbose=1, save_best_only=True)
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor="val_loss",\
-            patience=20, restore_best_weights=True)
+            patience=10, restore_best_weights=True)
     
     last_epoch = 0
     if len(weights_dir) > 0:
@@ -330,20 +338,109 @@ def recognize(closing, block, chars):
     print(text)
     return text
 
+#   raylib [text] example - Rectangle bounds
+#
+#   Example originally created with raylib 2.5, last time updated with raylib 4.0
+#
+#   Example contributed by Vlad Adrian (@demizdor) and reviewed by Ramon Santamaria (@raysan5)
+#
+#   Example licensed under an unmodified zlib/libpng license, which is an OSI-certified,
+#   BSD-like license that allows static linking with closed source software
+#
+#   Copyright (c) 2018-2024 Vlad Adrian (@demizdor) and Ramon Santamaria (@raysan5)
+def draw_text_boxed(font, text, x, width, y, height, font_size, color):
+    spacing = 1.0
+
+    length = pr.text_length(text)
+    scale_factor = font_size/float(font.baseSize)
+    draw = False
+    start_line = -1
+    end_line = -1
+    text_offset_y = 0.0
+    text_offset_x = 0.0
+
+    codepointByteCount = pr.ffi.new('int *', 0)
+
+    i = 0
+    while i < length:
+        codepointByteCount[0] = 0
+        codepoint = pr.get_codepoint(text[i], codepointByteCount)
+        index = pr.get_glyph_index(font, codepoint)
+
+        if codepoint == 0x3f:
+            codepointByteCount[0] = 1
+        i += (codepointByteCount[0] - 1)
+
+        glyph_width = 0.0
+        if font.glyphs[index].advanceX == 0:
+            glyph_width = font.recs[index].width*scale_factor
+        else:
+            glyph_width = font.glyphs[index].advanceX*scale_factor
+
+        if i + 1 < length:
+            glyph_width = glyph_width + spacing
+        
+        if draw:
+            if text_offset_y + font.baseSize*scale_factor > height:
+                break
+
+            if codepoint != ' ':
+                pr.draw_text_codepoint(font, codepoint,
+                                       pr.Vector2(x + text_offset_x, y + text_offset_y),
+                                       font_size, color)
+            if i == end_line:
+                text_offset_y += (float(font.baseSize) + float(font.baseSize)/2)*scale_factor
+                text_offset_x = 0.0
+                start_line = end_line
+                end_line = -1
+                glyph_width = 0.0
+
+                draw = not draw
+        else:
+            if codepoint == ' ':
+                end_line = i
+
+            if text_offset_x + glyph_width > width:
+                end_line = i if end_line < 1 else end_line
+                if i == end_line:
+                    end_line -= codepointByteCount[0]
+                if start_line + codepointByteCount[0] == end_line:
+                    end_line = (i - codepointByteCount[0])
+                draw = not draw
+            elif i+1 == length:
+                end_line = i
+                draw = not draw
+
+            if draw:
+                text_offset_x = 0.0
+                i = start_line
+                glyph_width = 0.0
+
+        if text_offset_x != 0 or codepoint != ' ':
+            text_offset_x += glyph_width
+        i += 1
+
 def main():
     figure_size = 320
-    SLIDER_WIDTH = 256
+    SLIDER_WIDTH = 320
     MARGIN = 800
+    WIDTH_BUTTON = 128
+    HEIGHT_BUTTON = 64
+    DEFAULT_FONT_SIZE = 20
+
     X_COORDS = [MARGIN]
     Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0,4)]
     Y_COORDS.append(figure_size+2*64)
-    Y_COORDS.append(figure_size+3*64)
-    Y_COORDS.append(figure_size+4*64)
+    Y_COORDS.append(figure_size+3*64+20)
 
-    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE);
+    pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE)
     pr.init_window(0, 0, "GUI")
-
+    pr.gui_set_style(pr.DEFAULT, pr.TEXT_SIZE, DEFAULT_FONT_SIZE)
+    
+    FONT = pr.get_font_default()
     full_height = pr.get_screen_height()
+    full_width = pr.get_screen_width()
+
     scale_y = full_height / (3.5*figure_size)
     Y_COORDS = list(map(lambda c : int(c*scale_y), Y_COORDS))
     figure_size = int(figure_size*scale_y)
@@ -359,9 +456,9 @@ def main():
     texture_closing = pr.load_texture_from_image(get_pr_img(closing, figure_size))
     texture_blocks = pr.load_texture_from_image(blocks_img)
     texture_chars = pr.load_texture_from_image(chars_img)
-    
-    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], 128, 64)
-    run_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], 128, 64)
+     
+    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
+    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
     text = ""
 
     pr.set_target_fps(30)
@@ -375,7 +472,7 @@ def main():
                 img, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
-        
+ 
         background_color_button_run = background_color_button_reset = pr.SKYBLUE
         border_color_run = border_color_reset = pr.DARKBLUE
 
@@ -383,10 +480,10 @@ def main():
         pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
         if pr.check_collision_point_rec(mouse_position, reset_button):
             if pressed:
-                word_dist_y[0] = 15.0
-                word_dist_x[0] = 7.0
-                block_dist_y[0] = 70.0
-                block_dist_x[0] = 70.0
+                word_dist_y[0] = WORD_DIST_Y
+                word_dist_x[0] = WORD_DIST_X
+                block_dist_y[0] = BLOCK_DIST_Y
+                block_dist_x[0] = BLOCK_DIST_X
                 update_textures = True
             else:
                 background_color_button_reset = pr.WHITE
@@ -394,8 +491,9 @@ def main():
         elif pr.check_collision_point_rec(mouse_position, run_button):
             if pressed:
                 blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
-                chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-                text = recognize(closing, blocks[0], chars) if len(blocks) > 0 else ""
+                if len(blocks) > 0:
+                    chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
+                    text = recognize(closing, blocks[0], chars) if len(blocks) > 0 else ""
             else:
                 background_color_button_run = pr.WHITE
                 border_color_run = pr.BLUE
@@ -423,16 +521,16 @@ def main():
         pr.draw_texture(texture_chars, 0, figure_size*2, pr.WHITE)
         
         prev = block_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[0], SLIDER_WIDTH, 64),   "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[0], SLIDER_WIDTH, HEIGHT_BUTTON),   "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
         update_textures = update_textures or prev != block_dist_y[0]
         prev = block_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[1], SLIDER_WIDTH, 64),  "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[1], SLIDER_WIDTH, HEIGHT_BUTTON),  "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[2], SLIDER_WIDTH, 64), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[2], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(800, Y_COORDS[3], SLIDER_WIDTH, 64), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
 
         pr.draw_rectangle_rec(reset_button, background_color_button_reset)
@@ -444,13 +542,14 @@ def main():
                 int(run_button.width), int(run_button.height),\
                 border_color_run)
         pr.draw_text("Restaurar", int(int(reset_button.x) + int(reset_button.width)//2 -\
-            pr.measure_text("Restaurar", 10)/2), int(Y_COORDS[4] + 30), 10,\
+            pr.measure_text("Restaurar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[4] + 25), DEFAULT_FONT_SIZE,\
             border_color_reset)
         pr.draw_text("Executar", int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text("Executar", 10)/2), int(Y_COORDS[5] + 30), 10,\
+            pr.measure_text("Executar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[4] + 25), DEFAULT_FONT_SIZE,\
             border_color_run)
-
-        pr.draw_text(text, X_COORDS[0], Y_COORDS[6], 20, pr.BLUE)
+        
+        draw_text_boxed(FONT, text, X_COORDS[0], full_width-X_COORDS[0]-200,
+                        Y_COORDS[5], full_height-Y_COORDS[5], 20, pr.BLUE)
 
         pr.end_drawing()
     
