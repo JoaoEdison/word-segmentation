@@ -24,13 +24,17 @@ python segmenter.py
 
 The neural network is not trained and tuned properly at present.
 
+### License
+
+MIT.
+
 ## Sobre
 
 Este programa faz a digitalização de textos manuscritos. Possui um interface gráfica de usuário (GUI) feita em [Raylib](https://github.com/raysan5/raylib), na qual é possível configurar os parâmetros principais usados na segmentação e acompanhar o resultado final.
 
 As palavras são segmentadas do texto principal usando-se uma abordagem de processamento de imagens. Depois, são digitalizadas por meio de uma rede neural formada pela combinação de uma rede neural convolucional e uma rede recorrente com memória de curto longo prazo. Este modelo não é de minha autoria; ele é baseado nos tutoriais: [OCR model for reading Captchas](https://keras.io/examples/vision/captcha_ocr) e [Japanese OCR with the CTC Loss](https://medium.com/@natsunoyuki/ocr-with-the-ctc-loss-efa62ebd8625).
 
-O dataset utilizado para o treinamento da rede neural proveio da [COMPETIÇÃO DE RECONHECIMENTO E VQA DE DOCUMENTOS MANUSCRITOS DA ICDAR 2024](https://ilocr.iiit.ac.in/icdar_2024_hwd/index.htm), Task A em Inglês.
+O dataset utilizado para o treinamento da rede neural proveio da [COMPETIÇÃO DE RECONHECIMENTO E VQA DE DOCUMENTOS MANUSCRITOS DA ICDAR 2024](https://ilocr.iiit.ac.in/icdar_2024_hwd/index.html), Task A em Inglês.
 
 ## Uso
 
@@ -49,3 +53,7 @@ python segmenter.py
 ### Aviso
 
 A rede neural não está treinada e ajustada adequadamente até o presente momento.
+
+### Licença
+
+MIT.
