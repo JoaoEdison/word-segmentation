@@ -31,13 +31,8 @@ def draw_rectangles(origin, recs, color, border_size):
     return out
 
 def get_pr_img(img, figure_size):
-    img = cv.resize(img, (figure_size, figure_size))
     img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
     return pr.Image(img.data, figure_size, figure_size, 1, 4)
-
-def update_img(img, recs, color, border_size, figure_size):
-    img = draw_rectangles(img, recs, color, border_size)
-    return get_pr_img(img, figure_size)
 
 def load_img(fname):
     img = cv.imread(fname)
@@ -62,7 +57,7 @@ def load_img(fname):
 #   BSD-like license that allows static linking with closed source software
 #
 #   Copyright (c) 2018-2024 Vlad Adrian (@demizdor) and Ramon Santamaria (@raysan5)
-def draw_text_boxed(font, text, x, width, y, height, font_size, color):
+def draw_text_boxed(font, text, box, font_size, color):
     spacing = 1.0
 
     length = pr.text_length(text)
@@ -95,12 +90,12 @@ def draw_text_boxed(font, text, x, width, y, height, font_size, color):
             glyph_width = glyph_width + spacing
         
         if draw:
-            if text_offset_y + font.baseSize*scale_factor > height:
+            if text_offset_y + font.baseSize*scale_factor > box.height:
                 break
 
             if codepoint != ' ':
                 pr.draw_text_codepoint(font, codepoint,
-                                       pr.Vector2(x + text_offset_x, y + text_offset_y),
+                                       pr.Vector2(box.x + text_offset_x, box.y + text_offset_y),
                                        font_size, color)
             if i == end_line:
                 text_offset_y += (float(font.baseSize) + float(font.baseSize)/2)*scale_factor
@@ -114,7 +109,7 @@ def draw_text_boxed(font, text, x, width, y, height, font_size, color):
             if codepoint == ' ':
                 end_line = i
 
-            if text_offset_x + glyph_width > width:
+            if text_offset_x + glyph_width > box.width:
                 end_line = i if end_line < 1 else end_line
                 if i == end_line:
                     end_line -= codepointByteCount[0]
@@ -139,7 +134,6 @@ def main():
     BLOCK_DIST_X = 70.0
     WORD_DIST_Y = 15.0
     WORD_DIST_X = 21.0
-    
     block_dist_y = pr.ffi.new('float *', BLOCK_DIST_Y)
     block_dist_x = pr.ffi.new('float *', BLOCK_DIST_X)
     word_dist_y = pr.ffi.new('float *', WORD_DIST_Y)
@@ -147,14 +141,15 @@ def main():
 
     figure_size = 320
     SLIDER_WIDTH = 320
-    MARGIN = 800
+    PADDING = 800
+    MARGIN = 20
     WIDTH_BUTTON = 128
     HEIGHT_BUTTON = 64
     DEFAULT_FONT_SIZE = 20
     TEST_IMAGE = 'test-images/81.jpg'
 
-    X_COORDS = [MARGIN]
-    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0,4)]
+    X_COORDS = [PADDING]
+    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0, 4)]
     Y_COORDS.append(figure_size+2*64)
     Y_COORDS.append(figure_size+3*64+20)
 
@@ -167,24 +162,34 @@ def main():
     full_width = pr.get_screen_width()
 
     scale_y = full_height / (3.5*figure_size)
-    Y_COORDS = list(map(lambda c: int(c*scale_y), Y_COORDS))
+    Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
     figure_size = int(figure_size*scale_y)
-    
+
     img, gray, closing, rectangles = load_img(TEST_IMAGE)
-    
+    closing_img = cv.resize(closing, (figure_size, figure_size))
     blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
     chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-    blocks_img = update_img(img, blocks, (0, 255, 0), 2, figure_size)
+    blocks_img = draw_rectangles(img, blocks, (0, 255, 0), 2)
+    blocks_img = cv.resize(blocks_img, (figure_size, figure_size))
     crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
-    chars_img = update_img(crop, chars, (0, 255, 0), 2, figure_size)
+    chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
+    chars_img = cv.resize(chars_img, (figure_size, figure_size))
    
-    texture_closing = pr.load_texture_from_image(get_pr_img(closing, figure_size))
-    texture_blocks = pr.load_texture_from_image(blocks_img)
-    texture_chars = pr.load_texture_from_image(chars_img)
-     
+    textures = [None]*3
+    textures[0] = [pr.Rectangle(MARGIN, Y_COORDS[0], figure_size, figure_size),
+                  pr.load_texture_from_image(get_pr_img(closing_img, figure_size)), [closing_img]]
+    textures[1] = [pr.Rectangle(MARGIN, Y_COORDS[2], figure_size, figure_size),
+                  pr.load_texture_from_image(get_pr_img(blocks_img, figure_size)), [blocks_img]]
+    textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[2]+figure_size, figure_size, figure_size),
+                  pr.load_texture_from_image(get_pr_img(chars_img, figure_size)), [chars_img]]
+
     reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
     run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
+    
     text = ""
+    text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[5],
+                            full_width-X_COORDS[0]-200,
+                            textures[2][0].y+figure_size-Y_COORDS[5])
 
     pr.set_target_fps(30)
     update_textures = False
@@ -195,14 +200,34 @@ def main():
                 pr.is_file_extension(dropped_files.paths[0], ".jpeg") or\
                 pr.is_file_extension(dropped_files.paths[0], ".png"):
                 img, gray, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
+                closing_img = cv.resize(closing, (figure_size, figure_size))
+                textures[0][2] = list(closing_img)
+                pr.update_texture[textures[0][1], get_pr_img(closing_img, figure_size).data]
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
  
+        mouse_position = pr.get_mouse_position()
+        
+        # Zoom
+        for t in textures:
+            if pr.check_collision_point_rec(mouse_position, t[0]):
+                wheel_move = pr.get_mouse_wheel_move()
+                if wheel_move > 0 and len(t[2]) < 7:
+                    resize_img = cv.resize(t[2][-1], (figure_size*2, figure_size*2))
+                    x = int(pr.get_mouse_x() - t[0].x)
+                    y = int(pr.get_mouse_y() - t[0].y)
+                    resize_img = resize_img[y:y+figure_size, x:x+figure_size]
+                    t[2].append(resize_img)
+                    pr.update_texture(t[1], get_pr_img(resize_img, figure_size).data)
+                elif wheel_move < 0 and len(t[2]) > 1:
+                    t[2].pop()
+                    resize_img = t[2][-1]
+                    pr.update_texture(t[1], get_pr_img(resize_img, figure_size).data)
+                break
+
+        pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
         background_color_button_run = background_color_button_reset = pr.SKYBLUE
         border_color_run = border_color_reset = pr.DARKBLUE
-
-        mouse_position = pr.get_mouse_position()
-        pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
         if pr.check_collision_point_rec(mouse_position, reset_button):
             if pressed:
                 word_dist_y[0] = WORD_DIST_Y
@@ -225,37 +250,44 @@ def main():
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
-            blocks_img = update_img(img, blocks, (0, 255, 0), 2, figure_size)
-            pr.update_texture(texture_blocks, blocks_img.data)
-            pr.update_texture(texture_closing, get_pr_img(closing, figure_size).data)
+            blocks_img = draw_rectangles(img, blocks, (0, 255, 0), 2)
+            blocks_img = cv.resize(blocks_img, (figure_size, figure_size))
+            closing_img = cv.resize(closing, (figure_size, figure_size))
+            textures[0][2].clear()
+            textures[0][2].append(closing_img)
+            pr.update_texture(textures[0][1], get_pr_img(closing_img, figure_size).data)
+            textures[1][2].clear()
+            textures[1][2].append(blocks_img)
+            pr.update_texture(textures[1][1], get_pr_img(blocks_img, figure_size).data)
             if len(blocks) > 0:
                 chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
                 crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
-                chars_img = update_img(crop, chars, (0, 255, 0), 2, figure_size)
-                pr.update_texture(texture_chars, chars_img.data)
+                chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
+                chars_img = cv.resize(chars_img, (figure_size, figure_size))
             else:
-                chars_img = update_img(img, [], (0, 255, 0), 2, figure_size)
-                pr.update_texture(texture_chars, chars_img.data)
+                chars_img = cv.resize(img, (figure_size, figure_size))
+            textures[2][2].clear()
+            textures[2][2].append(chars_img)
+            pr.update_texture(textures[2][1], get_pr_img(chars_img, figure_size).data)
             update_textures = False
 
         pr.begin_drawing()
         pr.clear_background(pr.WHITE)
         
-        pr.draw_texture(texture_closing, 0, 0, pr.WHITE)
-        pr.draw_texture(texture_blocks, 0, figure_size, pr.WHITE)
-        pr.draw_texture(texture_chars, 0, figure_size*2, pr.WHITE)
+        for t in textures:
+            pr.draw_texture(t[1], int(t[0].x), int(t[0].y), pr.WHITE)
         
         prev = block_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[0], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[0], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
         update_textures = update_textures or prev != block_dist_y[0]
         prev = block_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[1], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[1], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[2], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[2], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y, 0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(MARGIN, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x,  0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x, 0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
 
         pr.draw_rectangle_rec(reset_button, background_color_button_reset)
@@ -273,14 +305,13 @@ def main():
             pr.measure_text("Executar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[4] + 25), DEFAULT_FONT_SIZE,\
             border_color_run)
         
-        draw_text_boxed(FONT, text, X_COORDS[0], full_width-X_COORDS[0]-200,
-                        Y_COORDS[5], full_height-Y_COORDS[5], 20, pr.BLUE)
+        pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
+        draw_text_boxed(FONT, text, text_box, 20, pr.BLUE)
 
         pr.end_drawing()
     
-    pr.unload_texture(texture_blocks)
-    pr.unload_texture(texture_chars)
-
+    for t in textures:
+        pr.unload_texture(t[1])
     pr.close_window()
 
 if __name__ == '__main__':
