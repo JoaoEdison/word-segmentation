@@ -201,8 +201,9 @@ def main():
                 pr.is_file_extension(dropped_files.paths[0], ".png"):
                 img, gray, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
                 closing_img = cv.resize(closing, (figure_size, figure_size))
-                textures[0][2] = list(closing_img)
-                pr.update_texture[textures[0][1], get_pr_img(closing_img, figure_size).data]
+                pr.update_texture(textures[0][1], get_pr_img(closing_img, figure_size).data)
+                textures[0][2].clear()
+                textures[0][2].append(closing_img)
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
  
