@@ -88,6 +88,6 @@ def merge_recs(contours, dist_y=15, dist_x=7, overlap=0.25, by_overlap=False):
 
 def sort_recs(a, b):
     '''Ordena os retângulos de cima para baixo e da esquerda para a direita.'''
-    if abs(a[1]-b[1]) <= 25:
+    if abs(a[1]-b[1]) <= 20:
         return a[0] - b[0]
     return a[1] - b[1]

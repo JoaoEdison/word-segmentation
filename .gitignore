@@ -1,4 +1,5 @@
 Word_Level_Training_Set
 .mypy_cache/*
+__pycache__/*
 trabalho-pdi-2024-2-software.pdf
 *.swp

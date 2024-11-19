@@ -26,8 +26,9 @@ def get_chars(box, rectangles, dist_y, dist_x):
 
 def draw_rectangles(origin, recs, color, border_size):
     out = origin.copy()
-    for r in recs:
+    for i, r in enumerate(recs):
         cv.rectangle(out, (r[0], r[1]), (r[0]+r[2], r[1]+r[3]), color, border_size)
+        cv.putText(out, f"{i+1}", (r[0]+4, r[1]+20), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
     return out
 
 def get_pr_img(img, figure_size):
@@ -200,10 +201,6 @@ def main():
                 pr.is_file_extension(dropped_files.paths[0], ".jpeg") or\
                 pr.is_file_extension(dropped_files.paths[0], ".png"):
                 img, gray, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
-                closing_img = cv.resize(closing, (figure_size, figure_size))
-                pr.update_texture(textures[0][1], get_pr_img(closing_img, figure_size).data)
-                textures[0][2].clear()
-                textures[0][2].append(closing_img)
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
  
