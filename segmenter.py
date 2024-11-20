@@ -153,6 +153,22 @@ def draw_text_boxed(font, text, box, font_size, color):
         i += 1
 
 def main():
+    PORTUGUESE = False
+    if PORTUGUESE:
+        gui_texts = ["Distância limite de mesclagem no eixo Y (blocos)",
+                "Distância limite de mesclagem no eixo X (blocos)",
+                "Distância limite de mesclagem no eixo Y (palavras)",
+                "Distância limite de mesclagem no eixo X (palavras)",
+                "Anterior", "Proximo",
+                "Restaurar", "Ler"]
+    else:
+        gui_texts = ["Merge threshold distance on Y axis (blocks)",
+                "Merge threshold distance on X axis (blocks)",
+                "Merge threshold distance on Y axis (words)",
+                "Merge threshold distance on X axis (words)",
+                "Previous", "Next",
+                "Reset", "Read"]
+
     BLOCK_DIST_Y = 39.0
     BLOCK_DIST_X = 70.0
     WORD_DIST_Y = 15.0
@@ -341,16 +357,24 @@ def main():
             pr.draw_texture(t[1], int(t[0].x), int(t[0].y), pr.WHITE)
         
         prev = block_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[0], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (blocos)", f'{int(block_dist_y[0])}', block_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[0], SLIDER_WIDTH,
+            HEIGHT_BUTTON), gui_texts[0], f'{int(block_dist_y[0])}',
+            block_dist_y, 0, 100)
         update_textures = update_textures or prev != block_dist_y[0]
         prev = block_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[1], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[1], SLIDER_WIDTH,
+            HEIGHT_BUTTON), gui_texts[1], f'{int(block_dist_x[0])}',
+            block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH,
+            HEIGHT_BUTTON), gui_texts[2], f'{int(word_dist_y[0])}',
+            word_dist_y, 0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[4], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[4], SLIDER_WIDTH,
+            HEIGHT_BUTTON), gui_texts[3], f'{int(word_dist_x[0])}',
+            word_dist_x, 0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
         
         if len(blocks) > 1:
@@ -359,16 +383,16 @@ def main():
                 pr.draw_rectangle_lines(int(prev_button.x), int(prev_button.y),\
                         int(prev_button.width), int(prev_button.height),\
                         border_color_prev)
-                pr.draw_text("Anterior", int(int(prev_button.x) + int(prev_button.width)//2 -\
-                    pr.measure_text("Anterior", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                pr.draw_text(gui_texts[4], int(int(prev_button.x) + int(prev_button.width)//2 -\
+                    pr.measure_text(gui_texts[4], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
                     border_color_prev)
             if block_idx < len(blocks)-1:
                 pr.draw_rectangle_rec(next_button, background_color_button_next)
                 pr.draw_rectangle_lines(int(next_button.x), int(next_button.y),\
                         int(next_button.width), int(next_button.height),\
                         border_color_next)
-                pr.draw_text("Proximo", int(int(next_button.x) + int(next_button.width)//2 -\
-                    pr.measure_text("Proximo", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                pr.draw_text(gui_texts[5], int(int(next_button.x) + int(next_button.width)//2 -\
+                    pr.measure_text(gui_texts[5], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
                     border_color_next)
 
         pr.draw_rectangle_rec(reset_button, background_color_button_reset)
@@ -379,11 +403,11 @@ def main():
         pr.draw_rectangle_lines(int(run_button.x), int(run_button.y),\
                 int(run_button.width), int(run_button.height),\
                 border_color_run)
-        pr.draw_text("Restaurar", int(int(reset_button.x) + int(reset_button.width)//2 -\
-            pr.measure_text("Restaurar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
+        pr.draw_text(gui_texts[6], int(int(reset_button.x) + int(reset_button.width)//2 -\
+            pr.measure_text(gui_texts[6], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
             border_color_reset)
-        pr.draw_text("Ler", int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text("Ler", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
+        pr.draw_text(gui_texts[7], int(int(run_button.x) + int(run_button.width)//2 -\
+            pr.measure_text(gui_texts[7], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
             border_color_run)
         
         pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
