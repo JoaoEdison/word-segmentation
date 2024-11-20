@@ -25,9 +25,11 @@ import cv2 as cv
 import math
 import functools
 from itertools import accumulate
+from pathlib import Path
 import pyray as pr
 
 from rectangles import *
+from gui_elements import *
 from ocr_model import recognize
 
 # Assume que a imagem de entrada está em 1024x1024.
@@ -70,88 +72,6 @@ def load_img(fname):
     rectangles = list(filter(lambda r: filter_recs_by_size(r, 3, 500, 10, 500), rectangles))
     return img, gray, closing, rectangles
 
-#   raylib [text] example - Rectangle bounds
-#
-#   Example originally created with raylib 2.5, last time updated with raylib 4.0
-#
-#   Example contributed by Vlad Adrian (@demizdor) and reviewed by Ramon Santamaria (@raysan5)
-#
-#   Example licensed under an unmodified zlib/libpng license, which is an OSI-certified,
-#   BSD-like license that allows static linking with closed source software
-#
-#   Copyright (c) 2018-2024 Vlad Adrian (@demizdor) and Ramon Santamaria (@raysan5)
-def draw_text_boxed(font, text, box, font_size, color):
-    spacing = 1.0
-
-    length = pr.text_length(text)
-    scale_factor = font_size/float(font.baseSize)
-    draw = False
-    start_line = -1
-    end_line = -1
-    text_offset_y = 0.0
-    text_offset_x = 0.0
-
-    codepointByteCount = pr.ffi.new('int *', 0)
-
-    i = 0
-    while i < length:
-        codepointByteCount[0] = 0
-        codepoint = pr.get_codepoint(text[i], codepointByteCount)
-        index = pr.get_glyph_index(font, codepoint)
-
-        if codepoint == 0x3f:
-            codepointByteCount[0] = 1
-        i += (codepointByteCount[0] - 1)
-
-        glyph_width = 0.0
-        if font.glyphs[index].advanceX == 0:
-            glyph_width = font.recs[index].width*scale_factor
-        else:
-            glyph_width = font.glyphs[index].advanceX*scale_factor
-
-        if i + 1 < length:
-            glyph_width = glyph_width + spacing
-        
-        if draw:
-            if text_offset_y + font.baseSize*scale_factor > box.height:
-                break
-
-            if codepoint != ' ':
-                pr.draw_text_codepoint(font, codepoint,
-                                       pr.Vector2(box.x + text_offset_x, box.y + text_offset_y),
-                                       font_size, color)
-            if i == end_line:
-                text_offset_y += (float(font.baseSize) + float(font.baseSize)/2)*scale_factor
-                text_offset_x = 0.0
-                start_line = end_line
-                end_line = -1
-                glyph_width = 0.0
-
-                draw = not draw
-        else:
-            if codepoint == ' ':
-                end_line = i
-
-            if text_offset_x + glyph_width > box.width:
-                end_line = i if end_line < 1 else end_line
-                if i == end_line:
-                    end_line -= codepointByteCount[0]
-                if start_line + codepointByteCount[0] == end_line:
-                    end_line = (i - codepointByteCount[0])
-                draw = not draw
-            elif i+1 == length:
-                end_line = i
-                draw = not draw
-
-            if draw:
-                text_offset_x = 0.0
-                i = start_line
-                glyph_width = 0.0
-
-        if text_offset_x != 0 or codepoint != ' ':
-            text_offset_x += glyph_width
-        i += 1
-
 def main():
     PORTUGUESE = False
     if PORTUGUESE:
@@ -160,14 +80,14 @@ def main():
                 "Distância limite de mesclagem no eixo Y (palavras)",
                 "Distância limite de mesclagem no eixo X (palavras)",
                 "Anterior", "Proximo",
-                "Restaurar", "Ler"]
+                "Restaurar", "Ler", "Salvar"]
     else:
         gui_texts = ["Merge threshold distance on Y axis (blocks)",
                 "Merge threshold distance on X axis (blocks)",
                 "Merge threshold distance on Y axis (words)",
                 "Merge threshold distance on X axis (words)",
                 "Previous", "Next",
-                "Reset", "Read"]
+                "Reset", "Read", "Save"]
 
     BLOCK_DIST_Y = 39.0
     BLOCK_DIST_X = 70.0
@@ -185,7 +105,9 @@ def main():
     WIDTH_BUTTON = 128
     height_button = 64
     DEFAULT_FONT_SIZE = 20
-    TEST_IMAGE = 'test-images/251.jpg'
+    SAVE_DIR = 'digitized'
+    image_name = 'test-images/251.jpg'
+    image_path = SAVE_DIR / Path(Path(image_name).name.split('.')[0]+'.txt')
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE)
     pr.init_window(0, 0, "GUI")
@@ -203,7 +125,7 @@ def main():
     Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
     X_COORDS = [2*figure_size+PADDING]
 
-    img, gray, closing, rectangles = load_img(TEST_IMAGE)
+    img, gray, closing, rectangles = load_img(image_name)
     closing_img = cv.resize(closing, (figure_size, figure_size))
     blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
     chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
@@ -221,11 +143,16 @@ def main():
     textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[3], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(chars_img, figure_size)), [chars_img]]
     
-    prev_button = pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON, height_button)
-    next_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[2], WIDTH_BUTTON, height_button)
-
-    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON, height_button)
-    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5], WIDTH_BUTTON, height_button)
+    prev_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON,\
+        height_button), gui_texts[4], DEFAULT_FONT_SIZE)
+    next_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[2],\
+        WIDTH_BUTTON, height_button), gui_texts[5], DEFAULT_FONT_SIZE)
+    reset_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON,\
+        height_button), gui_texts[6], DEFAULT_FONT_SIZE)
+    run_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5],\
+        WIDTH_BUTTON, height_button), gui_texts[7], DEFAULT_FONT_SIZE)
+    save_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON*2, Y_COORDS[5],\
+        WIDTH_BUTTON, height_button), gui_texts[8], DEFAULT_FONT_SIZE)
     
     text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[6],
                             full_width-X_COORDS[0]-200,
@@ -242,7 +169,9 @@ def main():
             if pr.is_file_extension(dropped_files.paths[0], ".jpg") or\
                 pr.is_file_extension(dropped_files.paths[0], ".jpeg") or\
                 pr.is_file_extension(dropped_files.paths[0], ".png"):
-                img, gray, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
+                image_name = pr.ffi.string(dropped_files.paths[0]).decode('utf-8')
+                img, gray, closing, rectangles = load_img(image_name)
+                image_path = SAVE_DIR / Path(Path(image_name).name.split('.')[0]+'.txt')
                 block_idx = 0
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
@@ -267,12 +196,12 @@ def main():
                 break
 
         pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
-        background_color_button_prev = background_color_button_next =\
-        background_color_button_run = background_color_button_reset =\
-        pr.SKYBLUE
-        border_color_prev = border_color_next = border_color_run =\
-        border_color_reset = pr.DARKBLUE
-        if pr.check_collision_point_rec(mouse_position, reset_button):
+        prev_button.default()
+        next_button.default()
+        reset_button.default()
+        run_button.default()
+        save_button.default()
+        if pr.check_collision_point_rec(mouse_position, reset_button.rec):
             if pressed:
                 word_dist_y[0] = WORD_DIST_Y
                 word_dist_x[0] = WORD_DIST_X
@@ -280,19 +209,23 @@ def main():
                 block_dist_x[0] = BLOCK_DIST_X
                 update_textures = True
             else:
-                background_color_button_reset = pr.WHITE
-                border_color_reset = pr.BLUE
-        elif pr.check_collision_point_rec(mouse_position, run_button):
+                reset_button.hover()
+        elif pr.check_collision_point_rec(mouse_position, run_button.rec):
             if pressed:
                 if len(blocks) > 0:
                     chars = get_chars(blocks[block_idx], rectangles, word_dist_y[0], word_dist_x[0])
                     text = recognize(gray, blocks[block_idx], chars) if len(blocks) > 0 else ""
             else:
-                background_color_button_run = pr.WHITE
-                border_color_run = pr.BLUE
+                run_button.hover()
+        elif pr.check_collision_point_rec(mouse_position, save_button.rec):
+            if pressed and text != "":
+                Path(SAVE_DIR).mkdir(exist_ok=True)
+                image_path.write_text(text)
+            else:
+                save_button.hover()
 
         if len(blocks) > 0:
-            if pr.check_collision_point_rec(mouse_position, prev_button):
+            if pr.check_collision_point_rec(mouse_position, prev_button.rec):
                 if pressed:
                     if block_idx > 0:
                         block_idx -= 1
@@ -306,9 +239,8 @@ def main():
                         textures[2][2].append(chars_img)
                         pr.update_texture(textures[2][1], get_pr_img(chars_img, figure_size).data)
                 else:
-                    background_color_button_prev = pr.WHITE
-                    border_color_prev = pr.BLUE
-            elif pr.check_collision_point_rec(mouse_position, next_button):
+                    prev_button.hover()
+            elif pr.check_collision_point_rec(mouse_position, next_button.rec):
                 if pressed:
                     if block_idx < len(blocks)-1:
                         block_idx += 1
@@ -322,8 +254,7 @@ def main():
                         textures[2][2].append(chars_img)
                         pr.update_texture(textures[2][1], get_pr_img(chars_img, figure_size).data)
                 else:
-                    background_color_button_next = pr.WHITE
-                    border_color_next = pr.BLUE
+                    next_button.hover()
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
@@ -381,36 +312,12 @@ def main():
         
         if len(blocks) > 1:
             if block_idx > 0:
-                pr.draw_rectangle_rec(prev_button, background_color_button_prev)
-                pr.draw_rectangle_lines(int(prev_button.x), int(prev_button.y),\
-                        int(prev_button.width), int(prev_button.height),\
-                        border_color_prev)
-                pr.draw_text(gui_texts[4], int(int(prev_button.x) + int(prev_button.width)//2 -\
-                    pr.measure_text(gui_texts[4], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 20), DEFAULT_FONT_SIZE,\
-                    border_color_prev)
+                prev_button.draw()
             if block_idx < len(blocks)-1:
-                pr.draw_rectangle_rec(next_button, background_color_button_next)
-                pr.draw_rectangle_lines(int(next_button.x), int(next_button.y),\
-                        int(next_button.width), int(next_button.height),\
-                        border_color_next)
-                pr.draw_text(gui_texts[5], int(int(next_button.x) + int(next_button.width)//2 -\
-                    pr.measure_text(gui_texts[5], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 20), DEFAULT_FONT_SIZE,\
-                    border_color_next)
-
-        pr.draw_rectangle_rec(reset_button, background_color_button_reset)
-        pr.draw_rectangle_rec(run_button, background_color_button_run)
-        pr.draw_rectangle_lines(int(reset_button.x), int(reset_button.y),\
-                int(reset_button.width), int(reset_button.height),\
-                border_color_reset)
-        pr.draw_rectangle_lines(int(run_button.x), int(run_button.y),\
-                int(run_button.width), int(run_button.height),\
-                border_color_run)
-        pr.draw_text(gui_texts[6], int(int(reset_button.x) + int(reset_button.width)//2 -\
-            pr.measure_text(gui_texts[6], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 20), DEFAULT_FONT_SIZE,\
-            border_color_reset)
-        pr.draw_text(gui_texts[7], int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text(gui_texts[7], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 20), DEFAULT_FONT_SIZE,\
-            border_color_run)
+                next_button.draw()
+        reset_button.draw()
+        run_button.draw()
+        save_button.draw()
         
         pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
         draw_text_boxed(FONT, text, text_box, 20, pr.BLUE)
