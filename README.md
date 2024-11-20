@@ -1,3 +1,5 @@
+https://github.com/user-attachments/assets/c48987af-a11e-49b6-bdcd-a3db7c6c5d45
+
 ## About
 
 This program performs the digitization of handwritten texts. It features a graphical user interface (GUI) built with [Raylib](https://github.com/raysan5/raylib), allowing users to configure the main parameters used in segmentation and see the result.
