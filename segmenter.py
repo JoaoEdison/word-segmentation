@@ -178,18 +178,14 @@ def main():
     word_dist_y = pr.ffi.new('float *', WORD_DIST_Y)
     word_dist_x = pr.ffi.new('float *', WORD_DIST_X)
 
-    figure_size = 320
+    figure_size = 500
     SLIDER_WIDTH = 320
-    PADDING = 800
+    PADDING = 100
     MARGIN = 20
     WIDTH_BUTTON = 128
-    HEIGHT_BUTTON = 64
+    height_button = 64
     DEFAULT_FONT_SIZE = 20
     TEST_IMAGE = 'test-images/251.jpg'
-
-    X_COORDS = [PADDING]
-    Y_COORDS = [i//3*figure_size+64*(i%3) for i in range(0, 6)]
-    Y_COORDS.append(figure_size+3*64+20)
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE)
     pr.init_window(0, 0, "GUI")
@@ -199,9 +195,13 @@ def main():
     full_height = pr.get_screen_height()
     full_width = pr.get_screen_width()
 
-    scale_y = full_height / (3.5*figure_size)
-    Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
+    Y_COORDS = [i//3*figure_size+height_button*(i%3) for i in range(0, 6)]
+    Y_COORDS.append(figure_size+3*height_button+20)
+    scale_y = full_height / (2.3*figure_size)
     figure_size = int(figure_size*scale_y)
+    height_button = int(height_button*scale_y)
+    Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
+    X_COORDS = [2*figure_size+PADDING]
 
     img, gray, closing, rectangles = load_img(TEST_IMAGE)
     closing_img = cv.resize(closing, (figure_size, figure_size))
@@ -216,16 +216,16 @@ def main():
     textures = [None]*3
     textures[0] = [pr.Rectangle(MARGIN, Y_COORDS[0], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(closing_img, figure_size)), [closing_img]]
-    textures[1] = [pr.Rectangle(MARGIN, Y_COORDS[3], figure_size, figure_size),
+    textures[1] = [pr.Rectangle(figure_size+MARGIN, Y_COORDS[0], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(blocks_img, figure_size)), [blocks_img]]
-    textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[3]+figure_size, figure_size, figure_size),
+    textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[3], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(chars_img, figure_size)), [chars_img]]
     
-    prev_button = pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON*2, HEIGHT_BUTTON)
-    next_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON*2, Y_COORDS[2], WIDTH_BUTTON*2, HEIGHT_BUTTON)
+    prev_button = pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON, height_button)
+    next_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[2], WIDTH_BUTTON, height_button)
 
-    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON, HEIGHT_BUTTON)
-    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5], WIDTH_BUTTON, HEIGHT_BUTTON)
+    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON, height_button)
+    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5], WIDTH_BUTTON, height_button)
     
     text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[6],
                             full_width-X_COORDS[0]-200,
@@ -356,24 +356,26 @@ def main():
         for t in textures:
             pr.draw_texture(t[1], int(t[0].x), int(t[0].y), pr.WHITE)
         
+        padding_slider = pr.measure_text(gui_texts[0], DEFAULT_FONT_SIZE)-32
         prev = block_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[0], SLIDER_WIDTH,
-            HEIGHT_BUTTON), gui_texts[0], f'{int(block_dist_y[0])}',
+        pr.gui_slider_bar(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[0], SLIDER_WIDTH,
+            height_button), gui_texts[0], f'{int(block_dist_y[0])}',
             block_dist_y, 0, 100)
         update_textures = update_textures or prev != block_dist_y[0]
         prev = block_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[1], SLIDER_WIDTH,
-            HEIGHT_BUTTON), gui_texts[1], f'{int(block_dist_x[0])}',
+        pr.gui_slider_bar(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[1], SLIDER_WIDTH,
+            height_button), gui_texts[1], f'{int(block_dist_x[0])}',
             block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH,
-            HEIGHT_BUTTON), gui_texts[2], f'{int(word_dist_y[0])}',
+        padding_slider = pr.measure_text(gui_texts[2], DEFAULT_FONT_SIZE)-32
+        pr.gui_slider_bar(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[3], SLIDER_WIDTH,
+            height_button), gui_texts[2], f'{int(word_dist_y[0])}',
             word_dist_y, 0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[4], SLIDER_WIDTH,
-            HEIGHT_BUTTON), gui_texts[3], f'{int(word_dist_x[0])}',
+        pr.gui_slider_bar(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[4], SLIDER_WIDTH,
+            height_button), gui_texts[3], f'{int(word_dist_x[0])}',
             word_dist_x, 0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
         
@@ -384,7 +386,7 @@ def main():
                         int(prev_button.width), int(prev_button.height),\
                         border_color_prev)
                 pr.draw_text(gui_texts[4], int(int(prev_button.x) + int(prev_button.width)//2 -\
-                    pr.measure_text(gui_texts[4], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                    pr.measure_text(gui_texts[4], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 20), DEFAULT_FONT_SIZE,\
                     border_color_prev)
             if block_idx < len(blocks)-1:
                 pr.draw_rectangle_rec(next_button, background_color_button_next)
@@ -392,7 +394,7 @@ def main():
                         int(next_button.width), int(next_button.height),\
                         border_color_next)
                 pr.draw_text(gui_texts[5], int(int(next_button.x) + int(next_button.width)//2 -\
-                    pr.measure_text(gui_texts[5], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                    pr.measure_text(gui_texts[5], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 20), DEFAULT_FONT_SIZE,\
                     border_color_next)
 
         pr.draw_rectangle_rec(reset_button, background_color_button_reset)
@@ -404,10 +406,10 @@ def main():
                 int(run_button.width), int(run_button.height),\
                 border_color_run)
         pr.draw_text(gui_texts[6], int(int(reset_button.x) + int(reset_button.width)//2 -\
-            pr.measure_text(gui_texts[6], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
+            pr.measure_text(gui_texts[6], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 20), DEFAULT_FONT_SIZE,\
             border_color_reset)
         pr.draw_text(gui_texts[7], int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text(gui_texts[7], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
+            pr.measure_text(gui_texts[7], DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 20), DEFAULT_FONT_SIZE,\
             border_color_run)
         
         pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
