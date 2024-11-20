@@ -169,11 +169,10 @@ def main():
     WIDTH_BUTTON = 128
     HEIGHT_BUTTON = 64
     DEFAULT_FONT_SIZE = 20
-    TEST_IMAGE = 'test-images/81.jpg'
+    TEST_IMAGE = 'test-images/251.jpg'
 
     X_COORDS = [PADDING]
-    Y_COORDS = [i//2*figure_size+64 if i%2 == 1 else i//2*figure_size for i in range(0, 4)]
-    Y_COORDS.append(figure_size+2*64)
+    Y_COORDS = [i//3*figure_size+64*(i%3) for i in range(0, 6)]
     Y_COORDS.append(figure_size+3*64+20)
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE)
@@ -201,20 +200,25 @@ def main():
     textures = [None]*3
     textures[0] = [pr.Rectangle(MARGIN, Y_COORDS[0], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(closing_img, figure_size)), [closing_img]]
-    textures[1] = [pr.Rectangle(MARGIN, Y_COORDS[2], figure_size, figure_size),
+    textures[1] = [pr.Rectangle(MARGIN, Y_COORDS[3], figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(blocks_img, figure_size)), [blocks_img]]
-    textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[2]+figure_size, figure_size, figure_size),
+    textures[2] = [pr.Rectangle(MARGIN, Y_COORDS[3]+figure_size, figure_size, figure_size),
                   pr.load_texture_from_image(get_pr_img(chars_img, figure_size)), [chars_img]]
-
-    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
-    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[4], WIDTH_BUTTON, HEIGHT_BUTTON)
     
-    text = ""
-    text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[5],
+    prev_button = pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON*2, HEIGHT_BUTTON)
+    next_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON*2, Y_COORDS[2], WIDTH_BUTTON*2, HEIGHT_BUTTON)
+
+    reset_button = pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON, HEIGHT_BUTTON)
+    run_button = pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5], WIDTH_BUTTON, HEIGHT_BUTTON)
+    
+    text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[6],
                             full_width-X_COORDS[0]-200,
-                            textures[2][0].y+figure_size-Y_COORDS[5])
+                            textures[2][0].y+figure_size-Y_COORDS[6])
 
     pr.set_target_fps(30)
+
+    text = ""
+    block_idx = 0
     update_textures = False
     while not pr.window_should_close():
         if pr.is_file_dropped():
@@ -223,6 +227,7 @@ def main():
                 pr.is_file_extension(dropped_files.paths[0], ".jpeg") or\
                 pr.is_file_extension(dropped_files.paths[0], ".png"):
                 img, gray, closing, rectangles = load_img(pr.ffi.string(dropped_files.paths[0]).decode('utf-8'))
+                block_idx = 0
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
  
@@ -246,8 +251,11 @@ def main():
                 break
 
         pressed = pr.is_mouse_button_pressed(pr.MOUSE_BUTTON_LEFT)
-        background_color_button_run = background_color_button_reset = pr.SKYBLUE
-        border_color_run = border_color_reset = pr.DARKBLUE
+        background_color_button_prev = background_color_button_next =\
+        background_color_button_run = background_color_button_reset =\
+        pr.SKYBLUE
+        border_color_prev = border_color_next = border_color_run =\
+        border_color_reset = pr.DARKBLUE
         if pr.check_collision_point_rec(mouse_position, reset_button):
             if pressed:
                 word_dist_y[0] = WORD_DIST_Y
@@ -260,13 +268,46 @@ def main():
                 border_color_reset = pr.BLUE
         elif pr.check_collision_point_rec(mouse_position, run_button):
             if pressed:
-                blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
                 if len(blocks) > 0:
-                    chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-                    text = recognize(gray, blocks[0], chars) if len(blocks) > 0 else ""
+                    chars = get_chars(blocks[block_idx], rectangles, word_dist_y[0], word_dist_x[0])
+                    text = recognize(gray, blocks[block_idx], chars) if len(blocks) > 0 else ""
             else:
                 background_color_button_run = pr.WHITE
                 border_color_run = pr.BLUE
+
+        if len(blocks) > 0:
+            if pr.check_collision_point_rec(mouse_position, prev_button):
+                if pressed:
+                    if block_idx > 0:
+                        block_idx -= 1
+                        chars = get_chars(blocks[block_idx], rectangles, word_dist_y[0], word_dist_x[0])
+                        crop =\
+                        img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
+                                blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
+                        chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
+                        chars_img = cv.resize(chars_img, (figure_size, figure_size))
+                        textures[2][2].clear()
+                        textures[2][2].append(chars_img)
+                        pr.update_texture(textures[2][1], get_pr_img(chars_img, figure_size).data)
+                else:
+                    background_color_button_prev = pr.WHITE
+                    border_color_prev = pr.BLUE
+            elif pr.check_collision_point_rec(mouse_position, next_button):
+                if pressed:
+                    if block_idx < len(blocks)-1:
+                        block_idx += 1
+                        chars = get_chars(blocks[block_idx], rectangles, word_dist_y[0], word_dist_x[0])
+                        crop =\
+                        img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
+                                blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
+                        chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
+                        chars_img = cv.resize(chars_img, (figure_size, figure_size))
+                        textures[2][2].clear()
+                        textures[2][2].append(chars_img)
+                        pr.update_texture(textures[2][1], get_pr_img(chars_img, figure_size).data)
+                else:
+                    background_color_button_next = pr.WHITE
+                    border_color_next = pr.BLUE
 
         if update_textures:
             blocks = get_blocks(rectangles, block_dist_y[0], block_dist_x[0])
@@ -280,8 +321,10 @@ def main():
             textures[1][2].append(blocks_img)
             pr.update_texture(textures[1][1], get_pr_img(blocks_img, figure_size).data)
             if len(blocks) > 0:
-                chars = get_chars(blocks[0], rectangles, word_dist_y[0], word_dist_x[0])
-                crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
+                chars = get_chars(blocks[block_idx], rectangles, word_dist_y[0], word_dist_x[0])
+                crop =\
+                img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
+                        blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
                 chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
                 chars_img = cv.resize(chars_img, (figure_size, figure_size))
             else:
@@ -304,11 +347,29 @@ def main():
         pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[1], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (blocos)", f'{int(block_dist_x[0])}', block_dist_x, 0, 100)
         update_textures = update_textures or prev != block_dist_x[0]
         prev = word_dist_y[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[2], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo Y (palavras)", f'{int(word_dist_y[0])}',  word_dist_y, 0, 100)
         update_textures = update_textures or prev != word_dist_y[0]
         prev = word_dist_x[0]
-        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[3], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x, 0, 100)
+        pr.gui_slider_bar(pr.Rectangle(PADDING, Y_COORDS[4], SLIDER_WIDTH, HEIGHT_BUTTON), "Distância limite de mesclagem no eixo X (palavras)", f'{int(word_dist_x[0])}',  word_dist_x, 0, 100)
         update_textures = update_textures or prev != word_dist_x[0]
+        
+        if len(blocks) > 1:
+            if block_idx > 0:
+                pr.draw_rectangle_rec(prev_button, background_color_button_prev)
+                pr.draw_rectangle_lines(int(prev_button.x), int(prev_button.y),\
+                        int(prev_button.width), int(prev_button.height),\
+                        border_color_prev)
+                pr.draw_text("Anterior", int(int(prev_button.x) + int(prev_button.width)//2 -\
+                    pr.measure_text("Anterior", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                    border_color_prev)
+            if block_idx < len(blocks)-1:
+                pr.draw_rectangle_rec(next_button, background_color_button_next)
+                pr.draw_rectangle_lines(int(next_button.x), int(next_button.y),\
+                        int(next_button.width), int(next_button.height),\
+                        border_color_next)
+                pr.draw_text("Proximo", int(int(next_button.x) + int(next_button.width)//2 -\
+                    pr.measure_text("Proximo", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[2] + 25), DEFAULT_FONT_SIZE,\
+                    border_color_next)
 
         pr.draw_rectangle_rec(reset_button, background_color_button_reset)
         pr.draw_rectangle_rec(run_button, background_color_button_run)
@@ -319,10 +380,10 @@ def main():
                 int(run_button.width), int(run_button.height),\
                 border_color_run)
         pr.draw_text("Restaurar", int(int(reset_button.x) + int(reset_button.width)//2 -\
-            pr.measure_text("Restaurar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[4] + 25), DEFAULT_FONT_SIZE,\
+            pr.measure_text("Restaurar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
             border_color_reset)
-        pr.draw_text("Executar", int(int(run_button.x) + int(run_button.width)//2 -\
-            pr.measure_text("Executar", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[4] + 25), DEFAULT_FONT_SIZE,\
+        pr.draw_text("Ler", int(int(run_button.x) + int(run_button.width)//2 -\
+            pr.measure_text("Ler", DEFAULT_FONT_SIZE)/2), int(Y_COORDS[5] + 25), DEFAULT_FONT_SIZE,\
             border_color_run)
         
         pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
