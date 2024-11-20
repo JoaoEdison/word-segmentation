@@ -172,6 +172,7 @@ def main():
                 image_name = pr.ffi.string(dropped_files.paths[0]).decode('utf-8')
                 img, gray, closing, rectangles = load_img(image_name)
                 image_path = SAVE_DIR / Path(Path(image_name).name.split('.')[0]+'.txt')
+                text = ""
                 block_idx = 0
                 update_textures = True
             pr.unload_dropped_files(dropped_files)
@@ -218,11 +219,12 @@ def main():
             else:
                 run_button.hover()
         elif pr.check_collision_point_rec(mouse_position, save_button.rec):
-            if pressed and text != "":
-                Path(SAVE_DIR).mkdir(exist_ok=True)
-                image_path.write_text(text)
-            else:
-                save_button.hover()
+            if text != "":
+                if pressed:
+                    Path(SAVE_DIR).mkdir(exist_ok=True)
+                    image_path.write_text(text)
+                else:
+                    save_button.hover()
 
         if len(blocks) > 0:
             if pr.check_collision_point_rec(mouse_position, prev_button.rec):
@@ -317,7 +319,8 @@ def main():
                 next_button.draw()
         reset_button.draw()
         run_button.draw()
-        save_button.draw()
+        if text != "":
+            save_button.draw()
         
         pr.draw_rectangle_rec(text_box, pr.LIGHTGRAY)
         draw_text_boxed(FONT, text, text_box, 20, pr.BLUE)
