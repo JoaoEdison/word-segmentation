@@ -1,26 +1,67 @@
-# MIT License
-# 
-# Copyright (c) 2024 João Edison Roso Manica
-# 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-# 
-# The above copyright notice and this permission notice shall be included in all
-# copies or substantial portions of the Software.
-# 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-# SOFTWARE.
+'''
+Componentes da interface gráfica de usuário.
+
+MIT License
+
+Copyright (c) 2024 João Edison Roso Manica
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+'''
 
 import pyray as pr
+import cv2 as cv
+
+class ZoomImage:
+    def __init__(self, rec, zoom_images):
+        self.rec = rec
+        self.zoom_images = zoom_images
+        self.texture = pr.load_texture_from_image(self.get_pr_img(zoom_images[0]))
+
+    def get_pr_img(self, img):
+        img = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+        return pr.Image(img.data, int(self.rec.width), int(self.rec.height), 1, 4)
+
+    def update_texture(self, img):
+        pr.update_texture(self.texture, self.get_pr_img(img).data)
+
+class Slider:
+    def __init__(self, rec, text, min_v, init_v, max_v):
+        self.rec = rec
+        self.text = text
+        self.var = pr.ffi.new('float *', init_v)
+        self.min_v = min_v
+        self.init_v = init_v
+        self.max_v = max_v
+    
+    def get_value(self):
+        return self.var[0]
+
+    def reset_var(self):
+        self.var[0] = self.init_v
+
+    # Retorna True se houve mudança
+    def draw(self):
+        prev = self.var[0]
+        pr.gui_slider_bar(self.rec, self.text, f'{int(self.var[0])}', self.var,
+                          self.min_v, self.max_v)
+        return prev != self.var[0]
+
 
 class Button:
     def __init__(self, rec, text, font_size, background_color=pr.SKYBLUE,
