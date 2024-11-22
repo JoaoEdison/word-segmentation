@@ -313,7 +313,7 @@ def main():
 
         pr.end_drawing()
     
-    for t in textures:
+    for t in textures.values():
         pr.unload_texture(t.texture)
     pr.close_window()
 
