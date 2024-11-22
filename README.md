@@ -10,7 +10,7 @@ The dataset used for training the neural network comes from the [ICDAR 2024 COMP
 
 ## Usage
 
-This program was implemented in Python 3.10.15.
+This program was implemented in Python 3.10.15 and uses OpenGL.
 
 Install dependencies:
 ```console
@@ -40,7 +40,7 @@ O dataset utilizado para o treinamento da rede neural proveio da [ICDAR 2024 COM
 
 ## Uso
 
-Este programa foi implementado em Python 3.10.15.
+Este programa foi implementado em Python 3.10.15 e utiliza OpenGL.
 
 Instale as dependências:
 ```console
