@@ -88,13 +88,14 @@ def main():
     BLOCK_DIST_X = 70.0
     WORD_DIST_Y = 15.0
     WORD_DIST_X = 21.0
-    SLIDER_WIDTH = 320
+
     PADDING = 100
     MARGIN = 20
-    WIDTH_BUTTON = 128
     DEFAULT_FONT_SIZE = 20
 
+    slider_width = 320
     figure_size = 500
+    width_button = 128
     height_button = 64
 
     SAVE_DIR = 'digitized'
@@ -103,65 +104,75 @@ def main():
 
     pr.set_config_flags(pr.FLAG_WINDOW_RESIZABLE)
     pr.init_window(0, 0, "GUI")
-    pr.gui_set_style(pr.DEFAULT, pr.TEXT_SIZE, DEFAULT_FONT_SIZE)
-    
-    FONT = pr.get_font_default()
-    full_height = pr.get_screen_height()
-    full_width = pr.get_screen_width()
+    window_pos = pr.get_window_position()
 
-    Y_COORDS = [i//3*figure_size+height_button*(i%3) for i in range(0, 6)]
-    Y_COORDS.append(figure_size+3*height_button+20)
-    scale_y = full_height / (2.3*figure_size)
-    figure_size = int(figure_size*scale_y)
-    height_button = int(height_button*scale_y)
-    Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
+    pr.gui_set_style(pr.DEFAULT, pr.TEXT_SIZE, DEFAULT_FONT_SIZE)
+    FONT = pr.get_font_default()
+
+    full_height = pr.get_screen_height()-window_pos.y
+    full_width = pr.get_screen_width()-window_pos.x
+
     X_COORDS = [2*figure_size+PADDING]
+    Y_COORDS = [i//3*figure_size+height_button*(i%3) for i in range(0, 6)]
+    Y_COORDS.append(figure_size+3*height_button+MARGIN)
+
+    padding_slider = pr.measure_text(gui_texts[0], DEFAULT_FONT_SIZE)+10
+    scale_x = (full_width - padding_slider) / (X_COORDS[0] + slider_width + 30)
+    scale_y = full_height / (2.1*figure_size)
+    
+    figure_width = int(figure_size*scale_x)
+    figure_height = int(figure_size*scale_y)
+    slider_width = int(slider_width*scale_x)
+    width_button = max(90, int(width_button*scale_x))
+    height_button = max(30, int(height_button*scale_y))
+    Y_COORDS = list(map(lambda c: int(c*scale_y)+MARGIN, Y_COORDS))
+    X_COORDS = list(map(lambda c: int(c*scale_x)+MARGIN, X_COORDS))
 
     sliders = dict()
     padding_slider = pr.measure_text(gui_texts[0], DEFAULT_FONT_SIZE)-32
-    sliders['block_y'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[0], SLIDER_WIDTH, height_button),
+    sliders['block_y'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[0], slider_width, height_button),
                                 gui_texts[0], 0, BLOCK_DIST_Y, 100)
-    sliders['block_x'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[1], SLIDER_WIDTH, height_button),
+    sliders['block_x'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[1], slider_width, height_button),
                                 gui_texts[1], 0, BLOCK_DIST_X, 100)
     padding_slider = pr.measure_text(gui_texts[2], DEFAULT_FONT_SIZE)-32
-    sliders['word_y'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[3], SLIDER_WIDTH, height_button),
+    sliders['word_y'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[3], slider_width, height_button),
                                gui_texts[2], 0, WORD_DIST_Y, 100)
-    sliders['word_x'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[4], SLIDER_WIDTH, height_button),
+    sliders['word_x'] = Slider(pr.Rectangle(X_COORDS[0]+padding_slider, Y_COORDS[4], slider_width, height_button),
                                gui_texts[3], 0, WORD_DIST_X, 100)
 
     img, gray, closing, rectangles = load_img(image_name)
-    closing_img = cv.resize(closing, (figure_size, figure_size))
+    closing_img = cv.resize(closing, (figure_width, figure_height))
     blocks = get_blocks(rectangles, sliders['block_y'].get_value(), sliders['block_x'].get_value())
     chars = get_chars(blocks[0], rectangles, sliders['word_y'].get_value(), sliders['word_x'].get_value())
     blocks_img = draw_rectangles(img, blocks, (0, 255, 0), 2)
-    blocks_img = cv.resize(blocks_img, (figure_size, figure_size))
+    blocks_img = cv.resize(blocks_img, (figure_width, figure_height))
     crop = img[blocks[0][1]:blocks[0][1]+blocks[0][3], blocks[0][0]:blocks[0][0]+blocks[0][2]]
     chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
-    chars_img = cv.resize(chars_img, (figure_size, figure_size))
+    chars_img = cv.resize(chars_img, (figure_width, figure_height))
 
     textures = {
-        'closing' : ZoomImage(pr.Rectangle(MARGIN, Y_COORDS[0], figure_size, figure_size),
+        'closing' : ZoomImage(pr.Rectangle(MARGIN, Y_COORDS[0], figure_width, figure_height),
                             [closing_img]),
-        'blocks' : ZoomImage(pr.Rectangle(figure_size+MARGIN, Y_COORDS[0], figure_size, figure_size),
+        'blocks' : ZoomImage(pr.Rectangle(figure_width+MARGIN, Y_COORDS[0], figure_width, figure_height),
                             [blocks_img]),
-        'chars' : ZoomImage(pr.Rectangle(MARGIN, Y_COORDS[3], figure_size, figure_size),
+        'chars' : ZoomImage(pr.Rectangle(MARGIN, Y_COORDS[3], figure_width, figure_height),
                             [chars_img])
     }
 
-    prev_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[2], WIDTH_BUTTON,\
+    prev_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[2], width_button,\
         height_button), gui_texts[4], DEFAULT_FONT_SIZE)
-    next_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[2],\
-        WIDTH_BUTTON, height_button), gui_texts[5], DEFAULT_FONT_SIZE)
-    reset_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[5], WIDTH_BUTTON,\
+    next_button = Button(pr.Rectangle(X_COORDS[0]+width_button, Y_COORDS[2],\
+        width_button, height_button), gui_texts[5], DEFAULT_FONT_SIZE)
+    reset_button = Button(pr.Rectangle(X_COORDS[0], Y_COORDS[5], width_button,\
         height_button), gui_texts[6], DEFAULT_FONT_SIZE)
-    run_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON, Y_COORDS[5],\
-        WIDTH_BUTTON, height_button), gui_texts[7], DEFAULT_FONT_SIZE)
-    save_button = Button(pr.Rectangle(X_COORDS[0]+WIDTH_BUTTON*2, Y_COORDS[5],\
-        WIDTH_BUTTON, height_button), gui_texts[8], DEFAULT_FONT_SIZE)
+    run_button = Button(pr.Rectangle(X_COORDS[0]+width_button, Y_COORDS[5],\
+        width_button, height_button), gui_texts[7], DEFAULT_FONT_SIZE)
+    save_button = Button(pr.Rectangle(X_COORDS[0]+width_button*2, Y_COORDS[5],\
+        width_button, height_button), gui_texts[8], DEFAULT_FONT_SIZE)
 
     text_box = pr.Rectangle(X_COORDS[0], Y_COORDS[6],
-                            full_width-X_COORDS[0]-200,
-                            textures['chars'].rec.y+figure_size-Y_COORDS[6])
+                            full_width-X_COORDS[0]-MARGIN,
+                            textures['chars'].rec.y+figure_height-Y_COORDS[6])
 
     pr.set_target_fps(30)
 
@@ -189,10 +200,10 @@ def main():
             if pr.check_collision_point_rec(mouse_position, t.rec):
                 wheel_move = pr.get_mouse_wheel_move()
                 if wheel_move > 0 and len(t.zoom_images) < 7:
-                    resize_img = cv.resize(t.zoom_images[-1], (figure_size*2, figure_size*2))
+                    resize_img = cv.resize(t.zoom_images[-1], (figure_width*2, figure_height*2))
                     x = int(pr.get_mouse_x() - t.rec.x)
                     y = int(pr.get_mouse_y() - t.rec.y)
-                    resize_img = resize_img[y:y+figure_size, x:x+figure_size]
+                    resize_img = resize_img[y:y+figure_height, x:x+figure_width]
                     t.zoom_images.append(resize_img)
                     t.update_texture(resize_img)
                 elif wheel_move < 0 and len(t.zoom_images) > 1:
@@ -239,7 +250,7 @@ def main():
                         img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
                                 blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
                         chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
-                        chars_img = cv.resize(chars_img, (figure_size, figure_size))
+                        chars_img = cv.resize(chars_img, (figure_width, figure_height))
                         textures['chars'].zoom_images.clear()
                         textures['chars'].zoom_images.append(chars_img)
                         textures['chars'].update_texture(chars_img)
@@ -254,7 +265,7 @@ def main():
                         img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
                                 blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
                         chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
-                        chars_img = cv.resize(chars_img, (figure_size, figure_size))
+                        chars_img = cv.resize(chars_img, (figure_width, figure_height))
                         textures['chars'].zoom_images.clear()
                         textures['chars'].zoom_images.append(chars_img)
                         textures['chars'].update_texture(chars_img)
@@ -264,8 +275,8 @@ def main():
         if update_textures:
             blocks = get_blocks(rectangles, sliders['block_y'].get_value(), sliders['block_x'].get_value())
             blocks_img = draw_rectangles(img, blocks, (0, 255, 0), 2)
-            blocks_img = cv.resize(blocks_img, (figure_size, figure_size))
-            closing_img = cv.resize(closing, (figure_size, figure_size))
+            blocks_img = cv.resize(blocks_img, (figure_width, figure_height))
+            closing_img = cv.resize(closing, (figure_width, figure_height))
             textures['closing'].zoom_images.clear()
             textures['closing'].zoom_images.append(closing_img)
             textures['closing'].update_texture(closing_img)
@@ -278,9 +289,9 @@ def main():
                 img[blocks[block_idx][1]:blocks[block_idx][1]+blocks[block_idx][3],
                         blocks[block_idx][0]:blocks[block_idx][0]+blocks[block_idx][2]]
                 chars_img = draw_rectangles(crop, chars, (0, 255, 0), 2)
-                chars_img = cv.resize(chars_img, (figure_size, figure_size))
+                chars_img = cv.resize(chars_img, (figure_width, figure_height))
             else:
-                chars_img = cv.resize(img, (figure_size, figure_size))
+                chars_img = cv.resize(img, (figure_width, figure_height))
             textures['chars'].zoom_images.clear()
             textures['chars'].zoom_images.append(chars_img)
             textures['chars'].update_texture(chars_img)
@@ -294,7 +305,7 @@ def main():
         
         for s in sliders:
             change = sliders[s].draw()
-            if change and s == 'block_y' or s == 'block_x':
+            if change and (s == 'block_y' or s == 'block_x'):
                 block_idx = 0
             update_textures = update_textures or change
         

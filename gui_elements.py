@@ -90,7 +90,7 @@ class Button:
                 int(self.rec.width), int(self.rec.height),\
                 self.border_color)
         pr.draw_text(self.text, int(int(self.rec.x) + int(self.rec.width)//2 -\
-            pr.measure_text(self.text, self.font_size)/2), int(self.rec.y + 20), self.font_size,\
+            pr.measure_text(self.text, self.font_size)/2), int(self.rec.y + self.rec.height//3), self.font_size,\
             self.border_color)
 
 #   raylib [text] example - Rectangle bounds
