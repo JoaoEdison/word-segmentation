@@ -58,54 +58,32 @@ def merge_recs(contours, dist_y=15, dist_x=7, overlap=0.25, by_overlap=False):
     contours.sort(key=lambda tup: tup[0])
     rectangles_merged = contours
     merge = True
-    if by_overlap:
-        # Faz todas as uniões possíveis entre os contornos, usando a área de
-        # sobreposição.
-        while merge:
-            merge = False
-            prev = rectangles_merged
-            rectangles_merged = []
-            for i in range(len(prev)-1):
-                j = i+1
-                while j < len(prev):
-                    if intersec(prev[i], prev[j]) > overlap:
-                        rectangles_merged.append(union(prev[i], prev[j]))
-                        merge = True
-                        break
-                    j += 1
-                if merge:
-                    for k in range(i+1, len(prev)):
-                        if k == j:
-                            continue
-                        rectangles_merged.append(prev[k])
+    while merge:
+        merge = False
+        prev = rectangles_merged
+        rectangles_merged = []
+        for i in range(len(prev)-1):
+            j = i+1
+            while j < len(prev):
+                # Faz todas as uniões possíveis entre os contornos que estão
+                # próximos.
+                if (by_overlap and intersec(prev[i], prev[j]) > overlap) or \
+                   ((not by_overlap) and ((abs(prev[i][1]-prev[j][1]) <= dist_y and \
+                                      prev[j][0]-(prev[i][0]+prev[i][2]) <= dist_x) \
+                                     or inside(prev[i], prev[j]))):
+                    rectangles_merged.append(union(prev[i], prev[j]))
+                    merge = True
                     break
-                rectangles_merged.append(prev[i])
-                if i == len(prev)-2:
-                    rectangles_merged.append(prev[i+1])
-    else:
-        # Une os retângulos completamente sobrepostos ou considerados próximos.
-        while merge:
-            merge = False
-            prev = rectangles_merged
-            rectangles_merged = []
-            for i in range(len(prev)-1):
-                j = i+1
-                while j < len(prev):
-                    if (abs(prev[i][1]-prev[j][1]) <= dist_y and prev[j][0]-(prev[i][0]+prev[i][2]) <= dist_x) \
-                        or inside(prev[i], prev[j]):
-                        rectangles_merged.append(union(prev[i], prev[j]))
-                        merge = True
-                        break
-                    j += 1
-                if merge:
-                    for k in range(i+1, len(prev)):
-                        if k == j:
-                            continue
-                        rectangles_merged.append(prev[k])
-                    break
-                rectangles_merged.append(prev[i])
-                if i == len(prev)-2:
-                    rectangles_merged.append(prev[i+1])
+                j += 1
+            if merge:
+                for k in range(i+1, len(prev)):
+                    if k == j:
+                        continue
+                    rectangles_merged.append(prev[k])
+                break
+            rectangles_merged.append(prev[i])
+            if i == len(prev)-2:
+                rectangles_merged.append(prev[i+1])
     if len(rectangles_merged) == 0:
         rectangles_merged = prev
     return rectangles_merged
